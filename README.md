@@ -29,9 +29,8 @@ cd manometros
 ./instalar.sh
 ```
 
-Sem o git, baixe o `.tar.gz` da última versão em
-[Releases](https://github.com/pauloestefani/manometros/releases), extraia e rode
-`./instalar.sh` dentro da pasta.
+Sem o git, clique em **Code → Download ZIP** nesta página, extraia e rode
+`bash instalar.sh` dentro da pasta.
 
 O instalador faz 7 passos e pergunta antes de cada um que muda algo:
 
@@ -102,8 +101,9 @@ automática, use `verificar = false` em `[atualizacao]` no config.
 2. Aumente o número em `manometros/__init__.py` (por exemplo, de `0.2.0` para `0.2.1`).
 3. Envie para o ramo principal com `git push`.
 
-Todos os painéis instalados veem a versão nova na próxima verificação. Criar uma
-*release* no GitHub é opcional: serve para ter notas mais bonitas e um `.tar.gz` para baixar.
+Todos os painéis instalados veem a versão nova na próxima verificação. A mensagem
+do último commit aparece como "novidades" na janela de atualização. Criar uma
+*release* no GitHub é opcional: se existir uma com número maior, ela também é considerada.
 
 ## Configuração
 
