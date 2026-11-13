@@ -1,0 +1,76 @@
+# Configuração do Manômetros
+# Linhas que começam com # são comentários e não fazem nada.
+# Quase tudo aqui também pode ser escolhido clicando no painel (menu).
+# Depois de editar à mão, aplique com:  manometros --reiniciar
+
+# "janela"  = janelinha num canto do monitor
+# "faixa"   = uma tira na parte de baixo do monitor; janelas maximizadas não a cobrem
+# "inteiro" = ocupa o monitor todo, por baixo das janelas
+layout = "janela"
+
+# Só no modo janela: canto ("superior-direito", "superior-esquerdo",
+# "inferior-direito", "inferior-esquerdo"), distância da borda em pixels,
+# tamanho (1.0 = normal) e se fica "acima" ou "abaixo" das outras janelas.
+canto = "superior-direito"
+margem = 16
+escala = 1.0
+camada = "acima"
+
+# Em qual monitor abrir. "auto" escolhe o que NÃO é ultrawide.
+# Também aceita o número mostrado por  manometros --listar  (ex.: "1")
+# ou um pedaço do nome do modelo (ex.: "DELL").
+monitor = "auto"
+excluir_monitores = ["ULTRAWIDE"]
+
+# Modos "faixa" e "inteiro": se só houver um monitor ligado, o painel espera o
+# segundo voltar. Mude para true se quiser que ele apareça mesmo assim.
+# (A janelinha sempre aparece, mesmo com um monitor só.)
+mostrar_sem_segundo_monitor = false
+
+# Movimento suave dos arcos. Desligar economiza ainda mais processamento.
+animacao = true
+fps = 24
+
+# Cor dos arcos no estado normal (alerta e crítico têm cores próprias).
+# Sugestões: "#EDEDED" (cinza-claro), "#9BB4C8" (azul-aço), "#C9B79C" (areia), "#8FD3B6" (verde-claro)
+cor_destaque = "#EDEDED"
+
+# Limites de cor dos mostradores (°C para CPU/GPU, % para RAM)
+[cpu]
+alerta = 80
+critico = 90
+
+[gpu]
+alerta = 78
+critico = 85
+
+[ram]
+alerta = 80
+critico = 90
+
+[claude]
+# "segunda" = de segunda-feira 00:00 até agora; "7dias" = últimos 7 dias corridos
+semana = "segunda"
+# A leitura de cache costuma ser a maior parte dos tokens. false = conta só entrada, saída e escrita de cache.
+incluir_leitura_cache = true
+
+[ventoinhas]
+# "auto" tenta o CoolerControl e, se não der, lê direto do kernel (hwmon)
+fonte = "auto"
+coolercontrol_url = "http://localhost:11987"
+# Token de acesso SÓ DE LEITURA criado no CoolerControl (veja o README)
+coolercontrol_token = ""
+# Quais ventoinhas mostrar, pelos ids de  manometros --listar . Vazio = as 4 primeiras girando.
+mostrar = []
+# Rotação considerada "barra cheia" (o painel ajusta para cima sozinho se passar disso)
+rpm_max = 2000
+
+# Nomes que aparecem no painel. Use os ids de  manometros --listar
+[ventoinhas.nomes]
+# "nct6798/fan1" = "CPU"
+# "nct6798/fan2" = "Frente"
+
+[atualizacao]
+# Procura versão nova no GitHub uma vez por dia e avisa com um ponto no painel.
+# Nada é instalado sem você confirmar.
+verificar = true
