@@ -35,7 +35,10 @@ fps = 24
 # Sugestões: "#EDEDED" (cinza-claro), "#9BB4C8" (azul-aço), "#C9B79C" (areia), "#8FD3B6" (verde-claro)
 cor_destaque = "#EDEDED"
 
-# Limites de cor dos mostradores (°C para CPU/GPU, % para RAM)
+# Nos mostradores de CPU e GPU, o arco mostra o USO (%) e o número do meio a TEMPERATURA.
+# Na RAM, o arco mostra a % em uso e o número os GB usados.
+# A cor muda pela temperatura (CPU/GPU, em °C) ou pela % em uso (RAM):
+# âmbar a partir de "alerta", vermelho a partir de "critico".
 [cpu]
 alerta = 80
 critico = 90
@@ -47,12 +50,6 @@ critico = 85
 [ram]
 alerta = 80
 critico = 90
-
-[claude]
-# "segunda" = de segunda-feira 00:00 até agora; "7dias" = últimos 7 dias corridos
-semana = "segunda"
-# A leitura de cache costuma ser a maior parte dos tokens. false = conta só entrada, saída e escrita de cache.
-incluir_leitura_cache = true
 
 [ventoinhas]
 # "auto" tenta o CoolerControl e, se não der, lê direto do kernel (hwmon)

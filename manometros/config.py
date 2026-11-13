@@ -15,8 +15,6 @@ HOME = os.path.expanduser("~")
 CONFIG_DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.join(HOME, ".config")), "manometros")
 CACHE_DIR = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.join(HOME, ".cache")), "manometros")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.toml")
-LIMITES_FILE = os.path.join(CACHE_DIR, "limites.json")
-STATUSLINE_ANTERIOR = os.path.join(CONFIG_DIR, "statusline_anterior.txt")
 
 PADRAO = {
     "layout": "janela",             # "janela", "faixa" ou "inteiro"
@@ -30,15 +28,9 @@ PADRAO = {
     "animacao": True,
     "fps": 24,
     "cor_destaque": "#EDEDED",
-    "cpu": {"alerta": 80, "critico": 90, "min": 20, "max": 100},
-    "gpu": {"alerta": 78, "critico": 85, "min": 20, "max": 100},
-    "ram": {"alerta": 80, "critico": 90},
-    "claude": {
-        "semana": "segunda",         # "segunda" ou "7dias"
-        "incluir_leitura_cache": True,
-        "pastas": [],                # pastas extras com registros (opcional)
-        "intervalo_s": 30,
-    },
+    "cpu": {"alerta": 80, "critico": 90},   # °C: muda a cor do mostrador
+    "gpu": {"alerta": 78, "critico": 85},   # °C
+    "ram": {"alerta": 80, "critico": 90},   # % em uso
     "ventoinhas": {
         "fonte": "auto",             # "auto", "coolercontrol" ou "hwmon"
         "coolercontrol_url": "http://localhost:11987",

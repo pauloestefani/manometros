@@ -26,7 +26,7 @@ if [ "$(id -u)" -eq 0 ]; then
 fi
 
 # ------------------------------------------------------------------ 1. dependências
-negrito "1/7 · Verificando o que já está instalado"
+negrito "1/6 · Verificando o que já está instalado"
 declare -A PARA_QUE=(
   [python3-gi]="liga o Python às bibliotecas gráficas do sistema"
   [python3-gi-cairo]="permite desenhar com Cairo a partir do Python"
@@ -72,7 +72,7 @@ fi
 echo "  Python usado: $PY"
 
 # ------------------------------------------------------------------ 2. arquivos
-negrito "2/7 · Copiando o programa para $DESTINO"
+negrito "2/6 · Copiando o programa para $DESTINO"
 "$LANCADOR" --parar >/dev/null 2>&1 || true
 mkdir -p "$DESTINO" "$BIN_DIR" "$CONF_DIR"
 rm -rf "$DESTINO/manometros"
@@ -100,7 +100,7 @@ else
 fi
 
 # ------------------------------------------------------------------ 3. modo
-negrito "3/7 · Como o painel deve aparecer"
+negrito "3/6 · Como o painel deve aparecer"
 echo "  1) Janelinha no canto de um monitor (padrão)"
 echo "  2) Faixa na parte de baixo de um monitor"
 echo "  3) Monitor inteiro"
@@ -114,7 +114,7 @@ PYTHONPATH="$DESTINO" "$PY" -c "from manometros import config; config.salvar({'l
 echo "  modo: $MODO. Depois dá para trocar o modo, o monitor, o canto e o tamanho clicando no painel."
 
 # ------------------------------------------------------------------ 4. início automático
-negrito "4/7 · Início automático"
+negrito "4/6 · Início automático"
 echo "Cria um atalho em $AUTOSTART_DIR para o painel abrir quando você entra na sessão."
 if pergunta "Ativar? [S/n]" s; then
   mkdir -p "$AUTOSTART_DIR"
@@ -122,7 +122,7 @@ if pergunta "Ativar? [S/n]" s; then
 [Desktop Entry]
 Type=Application
 Name=Manômetros
-Comment=Painel de temperatura, RAM, ventoinhas e uso do Claude no segundo monitor
+Comment=Painel de temperatura e uso de CPU, GPU, RAM e ventoinhas
 Exec=$LANCADOR
 Terminal=false
 X-GNOME-Autostart-enabled=true
@@ -132,60 +132,8 @@ else
   echo "  pulado."
 fi
 
-# ------------------------------------------------------------------ 5. statusline do Claude Code
-negrito "5/7 · Limites do plano (statusline do Claude Code)"
-cat <<'EOF'
-Para mostrar o % do limite semanal e da sessão de 5 h, o painel usa a "statusline"
-do Claude Code: um pequeno script que o Claude Code chama sozinho e que recebe esses
-números oficiais. Isso altera ~/.claude/settings.json (com cópia de segurança).
-Se você já tem uma statusline, ela continua aparecendo igual: o script novo
-guarda os números e depois chama a sua.
-EOF
-if pergunta "Configurar a statusline? [s/N]" n; then
-  "$PY" - "$DESTINO/manometros/statusline.py" "$CONF_DIR/statusline_anterior.txt" <<'PYEOF'
-import json, os, shutil, sys, time
-script, arq_anterior = sys.argv[1], sys.argv[2]
-cfg_dir = os.environ.get("CLAUDE_CONFIG_DIR", "").split(",")[0].strip() or os.path.expanduser("~/.claude")
-caminho = os.path.join(cfg_dir, "settings.json")
-dados = {}
-if os.path.exists(caminho):
-    with open(caminho, encoding="utf-8") as fh:
-        txt = fh.read()
-    try:
-        dados = json.loads(txt) if txt.strip() else {}
-    except ValueError as exc:
-        print(f"  {caminho} não é um JSON válido ({exc}). Nada foi alterado.")
-        sys.exit(0)
-    copia = f"{caminho}.bak-manometros-{time.strftime('%Y%m%d-%H%M%S')}"
-    shutil.copy2(caminho, copia)
-    print(f"  cópia de segurança: {copia}")
-comando = f"/usr/bin/python3 {script}"
-atual = dados.get("statusLine")
-if isinstance(atual, dict) and atual.get("command") and "manometros" not in atual["command"]:
-    with open(arq_anterior, "w", encoding="utf-8") as fh:
-        fh.write(atual["command"])
-    print("  sua statusline anterior foi preservada e continuará aparecendo.")
-novo = {"type": "command", "command": comando}
-if isinstance(atual, dict):
-    for chave in ("padding", "refreshInterval"):
-        if chave in atual:
-            novo[chave] = atual[chave]
-dados["statusLine"] = novo
-os.makedirs(cfg_dir, exist_ok=True)
-tmp = caminho + ".tmp-manometros"
-with open(tmp, "w", encoding="utf-8") as fh:
-    json.dump(dados, fh, indent=2, ensure_ascii=False)
-    fh.write("\n")
-os.replace(tmp, caminho)
-print(f"  statusline configurada em {caminho}")
-print("  os números aparecem no painel depois da próxima resposta do Claude Code.")
-PYEOF
-else
-  echo "  pulado. O bloco de limites vai mostrar 'configure a statusline'."
-fi
-
-# ------------------------------------------------------------------ 6. CoolerControl
-negrito "6/7 · Ventoinhas pelo CoolerControl (opcional)"
+# ------------------------------------------------------------------ 5. CoolerControl
+negrito "5/6 · Ventoinhas pelo CoolerControl (opcional)"
 cat <<'EOF'
 Se o CoolerControl pedir autenticação, crie um token SÓ DE LEITURA nele
 (na seção Access Protection > Access Tokens, direito "Read-Only") e cole aqui.
@@ -209,8 +157,8 @@ else
   echo "  pulado."
 fi
 
-# ------------------------------------------------------------------ 7. teste
-negrito "7/7 · Diagnóstico"
+# ------------------------------------------------------------------ 6. teste
+negrito "6/6 · Diagnóstico"
 "$LANCADOR" --listar || true
 
 echo
@@ -223,7 +171,7 @@ cat <<EOF
 Clique no painel para escolher monitor, canto, tamanho, modo e para atualizar.
 
 Comandos úteis:
-  manometros --listar      mostra monitores, sensores e dados do Claude
+  manometros --listar      mostra monitores, sensores e ventoinhas
   manometros --atualizar   procura e instala uma versão nova
   manometros --reiniciar   reabre o painel (use depois de editar a configuração)
   manometros --parar       fecha o painel

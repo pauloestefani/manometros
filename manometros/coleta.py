@@ -1,14 +1,12 @@
-"""Coleta de dados: temperatura da CPU e da GPU, RAM, ventoinhas e uso do Claude.
+"""Coleta de dados: temperatura e uso da CPU e da GPU, RAM e ventoinhas.
 
 Tudo aqui é leitura simples de arquivos ou chamadas baratas:
-- CPU e ventoinhas: arquivos do kernel em /sys/class/hwmon (sem abrir programas)
+- CPU e ventoinhas: arquivos do kernel em /sys/class/hwmon e /proc/stat (sem abrir programas)
 - GPU: biblioteca NVML que vem com o driver NVIDIA (via ctypes, sem pip)
 - RAM: /proc/meminfo
 - Ventoinhas (preferencial): API local do CoolerControl
-- Claude: registros JSONL do Claude Code + arquivo gravado pela statusline
 """
 import ctypes
-import datetime as dt
 import glob
 import json
 import math
@@ -22,7 +20,6 @@ import urllib.error
 import urllib.request
 from collections import deque
 
-from . import config as C
 
 HWMON = "/sys/class/hwmon"
 
@@ -89,6 +86,33 @@ class SensorCPU:
     def ler(self):
         vals = [v / 1000.0 for v in (_ler_int(a) for a in self.arquivos) if v is not None]
         return max(vals) if vals else None
+
+
+class UsoCPU:
+    """Uso total da CPU em %, pela diferença entre duas leituras de /proc/stat."""
+
+    def __init__(self):
+        self.anterior = self._ler()
+
+    @staticmethod
+    def _ler():
+        try:
+            with open("/proc/stat") as fh:
+                campos = [int(x) for x in fh.readline().split()[1:9]]
+        except (OSError, ValueError):
+            return None
+        ocioso = campos[3] + campos[4]  # idle + iowait
+        return sum(campos), ocioso
+
+    def ler(self):
+        atual, anterior = self._ler(), self.anterior
+        self.anterior = atual
+        if not atual or not anterior:
+            return None
+        dt, docioso = atual[0] - anterior[0], atual[1] - anterior[1]
+        if dt <= 0:
+            return None
+        return max(0.0, min(100.0, (dt - docioso) / dt * 100.0))
 
 
 # ---------------------------------------------------------------- GPU (NVIDIA)
@@ -310,174 +334,6 @@ class Ventoinhas:
         return saida
 
 
-# ---------------------------------------------------------------- Claude
-def _ts(s):
-    if not isinstance(s, str):
-        return None
-    try:
-        return dt.datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()
-    except ValueError:
-        return None
-
-
-class UsoClaude:
-    """Lê os registros do Claude Code de forma incremental e sem contar repetições.
-
-    O Claude Code grava a mesma resposta em várias linhas (uma por bloco de conteúdo
-    e às vezes repetidas). Aqui cada resposta é contada uma vez, pela chave
-    message.id + requestId, guardando o maior valor visto de cada campo.
-    """
-
-    JANELA = 8 * 86400
-
-    def __init__(self, cfg):
-        self.cfg = cfg["claude"]
-        self.arquivos = {}   # caminho -> [inode, posição já lida]
-        self.msgs = {}       # chave -> [ts, entrada, saída, escrita_cache, leitura_cache]
-        self.pastas = []
-
-    def _pastas(self):
-        cands = []
-        env = os.environ.get("CLAUDE_CONFIG_DIR")
-        if env:
-            cands += [os.path.join(p.strip(), "projects") for p in env.split(",") if p.strip()]
-        cands += [os.path.join(C.HOME, ".claude", "projects"), os.path.join(C.HOME, ".config", "claude", "projects")]
-        cands += [os.path.expanduser(p) for p in self.cfg.get("pastas") or []]
-        vistos, saida = set(), []
-        for p in cands:
-            r = os.path.realpath(p)
-            if r not in vistos and os.path.isdir(r):
-                vistos.add(r)
-                saida.append(r)
-        return saida
-
-    def _registrar(self, obj):
-        if obj.get("type") != "assistant":
-            return
-        msg = obj.get("message")
-        if not isinstance(msg, dict):
-            return
-        u = msg.get("usage")
-        if not isinstance(u, dict):
-            return
-        ts = _ts(obj.get("timestamp"))
-        if ts is None:
-            return
-        chave = f"{msg.get('id') or obj.get('uuid') or ''}|{obj.get('requestId') or ''}"
-        try:
-            vals = [int(u.get(k) or 0) for k in ("input_tokens", "output_tokens",
-                                                   "cache_creation_input_tokens", "cache_read_input_tokens")]
-        except (TypeError, ValueError):
-            return
-        ant = self.msgs.get(chave)
-        if ant is None:
-            self.msgs[chave] = [ts] + vals
-        else:
-            ant[0] = min(ant[0], ts)
-            for i in range(4):
-                if vals[i] > ant[i + 1]:
-                    ant[i + 1] = vals[i]
-
-    def _ler_arquivo(self, caminho, inicio):
-        try:
-            with open(caminho, "rb") as fh:
-                fh.seek(inicio)
-                dados = fh.read()
-        except OSError:
-            return inicio
-        fim = dados.rfind(b"\n")
-        if fim < 0:
-            return inicio  # linha ainda sendo escrita
-        for linha in dados[: fim + 1].split(b"\n"):
-            if b'"usage"' not in linha:
-                continue
-            try:
-                obj = json.loads(linha)
-            except ValueError:
-                continue
-            if isinstance(obj, dict):
-                self._registrar(obj)
-        return inicio + fim + 1
-
-    def atualizar(self, agora=None):
-        agora = agora or time.time()
-        corte = agora - self.JANELA
-        self.pastas = self._pastas()
-        vistos = set()
-        for pasta in self.pastas:
-            for raiz, _dirs, arqs in os.walk(pasta):
-                for nome in arqs:
-                    if not nome.endswith(".jsonl"):
-                        continue
-                    p = os.path.join(raiz, nome)
-                    try:
-                        st = os.stat(p)
-                    except OSError:
-                        continue
-                    vistos.add(p)
-                    reg = self.arquivos.get(p)
-                    if reg is None:
-                        if st.st_mtime < corte:  # arquivo antigo: só acompanha o que vier depois
-                            self.arquivos[p] = [st.st_ino, st.st_size]
-                            continue
-                        reg = self.arquivos[p] = [st.st_ino, 0]
-                    if reg[0] != st.st_ino or st.st_size < reg[1]:
-                        reg[0], reg[1] = st.st_ino, 0
-                    if st.st_size > reg[1]:
-                        reg[1] = self._ler_arquivo(p, reg[1])
-        for p in list(self.arquivos):
-            if p not in vistos:
-                del self.arquivos[p]
-        for k in [k for k, v in self.msgs.items() if v[0] < corte]:
-            del self.msgs[k]
-
-    def totais(self, agora=None):
-        agora = agora or time.time()
-        hoje0 = dt.datetime.combine(dt.date.fromtimestamp(agora), dt.time())
-        ini_dia = hoje0.timestamp()
-        if self.cfg.get("semana") == "7dias":
-            ini_sem = agora - 7 * 86400
-        else:
-            ini_sem = (hoje0 - dt.timedelta(days=hoje0.weekday())).timestamp()
-        dia, sem = [0, 0, 0, 0], [0, 0, 0, 0]
-        for ts, *v in self.msgs.values():
-            if ts >= ini_sem:
-                for i in range(4):
-                    sem[i] += v[i]
-            if ts >= ini_dia:
-                for i in range(4):
-                    dia[i] += v[i]
-        cache_leitura = bool(self.cfg.get("incluir_leitura_cache", True))
-
-        def total(v):
-            return v[0] + v[1] + v[2] + (v[3] if cache_leitura else 0)
-
-        return {"ok": bool(self.pastas), "hoje": total(dia), "hoje_saida": dia[1],
-                "semana": total(sem), "semana_saida": sem[1], "respostas": len(self.msgs)}
-
-
-def ler_limites(agora=None):
-    agora = agora or time.time()
-    try:
-        st = os.stat(C.LIMITES_FILE)
-        with open(C.LIMITES_FILE, "r", encoding="utf-8") as fh:
-            dados = json.load(fh)
-    except (OSError, ValueError):
-        return None
-    rl = dados.get("rate_limits") or {}
-    saida = {"recebido_em": float(dados.get("recebido_em") or st.st_mtime), "janelas": {}}
-    for k in ("seven_day", "five_hour"):
-        w = rl.get(k)
-        if isinstance(w, dict) and w.get("used_percentage") is not None:
-            try:
-                zera = float(w.get("resets_at")) if w.get("resets_at") is not None else None
-                saida["janelas"][k] = {"pct": float(w["used_percentage"]), "zera": zera,
-                                       "expirou": zera is not None and zera <= agora}
-            except (TypeError, ValueError):
-                continue
-    return saida
-
-
 # ---------------------------------------------------------------- coletor em segundo plano
 class Coletor(threading.Thread):
     """Lê tudo em intervalos e entrega uma 'foto' dos dados para a interface."""
@@ -491,13 +347,11 @@ class Coletor(threading.Thread):
         self.picos = deque()
         if not demo:
             self.cpu = SensorCPU()
+            self.uso_cpu = UsoCPU()
             self.gpu = SensorGPU()
             self.fans = Ventoinhas(cfg)
-            self.claude = UsoClaude(cfg)
         self._fans = {"lista": [], "fonte": None, "aviso": None}
-        self._claude = {"ok": False}
-        self._lim = None
-        self._t_fans = self._t_claude = self._t_lim = -1e9
+        self._t_fans = -1e9
 
     def foto(self):
         agora = time.time()
@@ -514,24 +368,12 @@ class Coletor(threading.Thread):
         if mono - self._t_fans >= 2:
             self._t_fans = mono
             self._fans = {"lista": self.fans.ler(), "fonte": self.fans.fonte, "aviso": self.fans.aviso}
-        if mono - self._t_claude >= float(self.cfg["claude"].get("intervalo_s", 30)):
-            self._t_claude = mono
-            try:
-                self.claude.atualizar(agora)
-            except Exception as exc:  # nunca derrubar o painel por causa de um registro estranho
-                print(f"Aviso: erro lendo registros do Claude: {exc}")
-        if mono - self._t_lim >= 10:
-            self._t_lim = mono
-            self._lim = ler_limites(agora)
-        claude = self.claude.totais(agora)
-        claude["limites"] = self._lim
         return {
             "t": agora,
-            "cpu": {"temp": temp, "pico": pico},
+            "cpu": {"temp": temp, "pico": pico, "uso": self.uso_cpu.ler()},
             "gpu": {"temp": g_temp, "potencia": g_pot, "uso": g_uso, "existe": self.gpu.nome is not None},
             "ram": ler_ram(),
             "ventoinhas": self._fans,
-            "claude": claude,
         }
 
     def run(self):
@@ -554,15 +396,10 @@ def foto_demo(agora):
             ("Topo", 790 + 150 * math.sin(s + 2)), ("GPU", 1150 + 900 * math.sin(s * 0.6 + 1))]
     return {
         "t": agora,
-        "cpu": {"temp": cpu, "pico": cpu + 3},
+        "cpu": {"temp": cpu, "pico": cpu + 3, "uso": max(0.0, min(100.0, 35 + 30 * math.sin(s * 1.7) + 15 * math.sin(s * 4.3)))},
         "gpu": {"temp": gpu, "potencia": 140 + 120 * math.sin(s * 0.6 + 1), "uso": 50 + 45 * math.sin(s * 0.6 + 1),
                 "existe": True},
         "ram": {"pct": ram, "usado": ram / 100 * 32 * 2**30, "total": 32 * 2**30},
         "ventoinhas": {"lista": [{"id": n, "nome": n, "rpm": int(r), "frac": r / (3000 if n == "GPU" else 2000)}
                                  for n, r in fans], "fonte": "demo", "aviso": None},
-        "claude": {"ok": True, "hoje": 8_412_907, "hoje_saida": 182_000, "semana": 46_380_115,
-                   "semana_saida": 1_100_000, "respostas": 0,
-                   "limites": {"recebido_em": agora - 180, "janelas": {
-                       "seven_day": {"pct": 41, "zera": agora + 2 * 86400 + 14 * 3600, "expirou": False},
-                       "five_hour": {"pct": 23, "zera": agora + 3 * 3600 + 600, "expirou": False}}}},
     }

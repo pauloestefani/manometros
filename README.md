@@ -2,13 +2,17 @@
 
 Painel no estilo dos manômetros de carro para Linux. Pode ficar como uma
 janelinha num canto do monitor, como uma faixa na parte de baixo ou ocupando
-um monitor inteiro. Mostra:
+um monitor inteiro.
 
-- temperatura da CPU (e o pico dos últimos 5 minutos)
-- temperatura da GPU NVIDIA, com potência e uso
-- uso da memória RAM
-- tokens do Claude Code hoje e na semana, e o % dos limites do plano
-- rotação das ventoinhas (pelo CoolerControl ou direto do kernel)
+| Mostrador | O arco mostra | O número do meio mostra |
+|---|---|---|
+| **CPU** | uso (%) | temperatura (°C) |
+| **GPU** (NVIDIA) | uso (%) | temperatura (°C) |
+| **RAM** | % em uso | GB usados |
+
+Embaixo ficam as **ventoinhas**, com a rotação (pelo CoolerControl ou direto do kernel).
+A cor muda para âmbar e depois vermelho quando a temperatura (CPU/GPU) ou a
+% de RAM passa dos limites do config.
 
 ![Janelinha no canto do monitor](docs/janelinha.png)
 
@@ -32,7 +36,7 @@ cd manometros
 Sem o git, clique em **Code → Download ZIP** nesta página, extraia e rode
 `bash instalar.sh` dentro da pasta.
 
-O instalador faz 7 passos e pergunta antes de cada um que muda algo:
+O instalador faz 6 passos e pergunta antes de cada um que muda algo:
 
 | Passo | O que faz | Precisa de senha? |
 |---|---|---|
@@ -40,9 +44,8 @@ O instalador faz 7 passos e pergunta antes de cada um que muda algo:
 | 2 | Copia o programa para `~/.local/share/manometros` e cria o comando `manometros` | Não |
 | 3 | Escolhe o modo: janelinha, faixa ou monitor inteiro | Não |
 | 4 | Ativa o início automático com a sessão | Não |
-| 5 | (Opcional) Configura a statusline do Claude Code para ler os limites do plano, com cópia de segurança | Não |
-| 6 | (Opcional) Guarda o token do CoolerControl | Não |
-| 7 | Mostra um diagnóstico e abre o painel | Não |
+| 5 | (Opcional) Guarda o token do CoolerControl | Não |
+| 6 | Mostra um diagnóstico e abre o painel | Não |
 
 Os pacotes do passo 1 são todos oficiais do Ubuntu/Pop!_OS: `python3-gi`,
 `python3-gi-cairo`, `gir1.2-gtk-3.0`, `gir1.2-gtklayershell-0.1` e `fonts-inter`.
@@ -68,7 +71,7 @@ As escolhas ficam salvas em `~/.config/manometros/config.toml`.
 Pelo terminal:
 
 ```bash
-manometros --listar       # monitores, sensores, ventoinhas e dados do Claude
+manometros --listar       # monitores, sensores e ventoinhas
 manometros --reiniciar    # reabre o painel (depois de editar a configuração à mão)
 manometros --parar        # fecha o painel
 manometros --atualizar    # procura e instala uma versão nova
@@ -115,9 +118,8 @@ Depois de editar à mão, rode `manometros --reiniciar`.
 - `canto`, `margem`, `escala`, `camada`: posição, distância da borda, tamanho e
   se fica acima ou abaixo das janelas (modo janela)
 - `cor_destaque`: a cor dos arcos no estado normal
-- `[cpu]`, `[gpu]`, `[ram]`: a partir de quanto fica âmbar (`alerta`) e vermelho (`critico`)
-- `[claude] semana`: "segunda" (desde segunda 00:00) ou "7dias" (últimos 7 dias)
-- `[claude] incluir_leitura_cache`: veja abaixo
+- `[cpu]`, `[gpu]`: temperatura (°C) em que fica âmbar (`alerta`) e vermelho (`critico`)
+- `[ram]`: % em uso em que fica âmbar e vermelho
 - `[ventoinhas] mostrar` e `[ventoinhas.nomes]`: quais ventoinhas e com que nome
   (os ids aparecem no `--listar`)
 
@@ -135,29 +137,6 @@ coolercontrol_token = "cc_..."
 Sem token, ele lê as ventoinhas direto do kernel (`/sys/class/hwmon`), com nomes
 técnicos como "Fan 2". Dá para renomear em `[ventoinhas.nomes]`.
 
-## Uso do Claude: o que é medido de verdade
-
-**Tokens (hoje e semana).** Vêm dos registros que o Claude Code grava em
-`~/.claude/projects/`.
-- Cada resposta é contada uma vez, porque o Claude Code repete a mesma resposta
-  em várias linhas.
-- O campo de tokens de entrada às vezes fica com um valor provisório, então é uma
-  estimativa boa para ver tendência, não um valor exato.
-- Por padrão, a soma inclui a leitura de cache, que costuma ser a maior parte.
-  Com `incluir_leitura_cache = false`, conta só entrada, saída e escrita de cache.
-
-**Limites do plano (% semanal e da sessão de 5 h).** São os números oficiais que
-o Claude Code recebe, pela statusline (passo 5 do instalador).
-- **Incluem o uso pelo navegador e pelo app**, porque o limite é compartilhado.
-- Só existem para planos Pro/Max.
-- Só atualizam quando o Claude Code responde algo; o painel mostra há quanto
-  tempo chegou o último número.
-
-**O que fica de fora:**
-- A contagem de tokens do navegador, do app desktop e do celular: não existe
-  registro local disso.
-- O Claude Code rodando em outros computadores ou na nuvem.
-
 ## Como ele se fixa no monitor (Wayland)
 
 No Wayland, um programa comum não escolhe em qual monitor abre. O Manômetros usa o
@@ -174,8 +153,6 @@ quando o monitor reaparece.
   Veja também o registro em `~/.cache/manometros/manometros.log`.
 - **O menu não abre ao clicar.** Use o `config.toml` (ou `manometros --monitor N`)
   e me conte em uma *issue*.
-- **"sem statusline".** Rode o `./instalar.sh` de novo e responda "s" no passo 5.
-  Depois mande qualquer mensagem no Claude Code.
 - **A fonte ficou diferente.** Instale a Inter: `sudo apt install fonts-inter`.
 - **GPU não encontrada.** Confira se o driver NVIDIA está ativo, com `nvidia-smi`.
 
@@ -185,5 +162,9 @@ quando o monitor reaparece.
 ./desinstalar.sh
 ```
 
-Remove o programa, o comando e o início automático, e devolve a statusline
-anterior. Pergunta se deve apagar a configuração.
+Remove o programa, o comando e o início automático. Pergunta se deve apagar a
+configuração.
+
+> Versões até a 0.2.0 também mostravam o uso do Claude Code e podiam configurar a
+> statusline dele. Se você configurou, ela continua funcionando; o `desinstalar.sh`
+> devolve a statusline que você tinha antes.

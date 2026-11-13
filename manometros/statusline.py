@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Statusline do Claude Code para o Manômetros.
+"""Statusline do Claude Code (de versões antigas do Manômetros).
+
+Desde a versão 0.2.1 o painel não mostra mais o uso do Claude. Este arquivo continua
+aqui só para não quebrar a statusline de quem a configurou numa versão anterior;
+o desinstalar.sh devolve a statusline que você tinha antes.
 
 O Claude Code chama este script a cada atualização e manda um JSON pela entrada
 padrão. Quando esse JSON traz "rate_limits" (planos Pro/Max), guardamos uma cópia

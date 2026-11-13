@@ -486,11 +486,7 @@ class Janela(Gtk.Window):
         """Chamado pelo coletor (via GLib.idle_add) com dados novos."""
         self.foto = foto
         agora = time.monotonic()
-        alvos = {
-            "cpu": (foto.get("cpu") or {}).get("temp"),
-            "gpu": (foto.get("gpu") or {}).get("temp"),
-            "ram": (foto.get("ram") or {}).get("pct"),
-        }
+        alvos = desenho.valores_dos_arcos(foto)  # uso da CPU, uso da GPU, % de RAM
         animar = self.cfg.get("animacao", True)
         for k, alvo in alvos.items():
             atual = self.exib.get(k)
@@ -502,36 +498,17 @@ class Janela(Gtk.Window):
             elif abs(alvo - atual) >= 0.05:
                 self.anim[k] = (atual, alvo, agora)
             self._invalidar_se_mudou(k, self._sig_mostrador(k))
-        for bloco in ("tokens", "limites", "fans"):
-            self._invalidar_se_mudou(bloco, self._sig_bloco(bloco))
+        self._invalidar_se_mudou("fans", self._sig_fans())
         self._ligar_ticker()
         return False
 
     def _sig_mostrador(self, k):
-        f = self.foto or {}
-        if k == "cpu":
-            p = (f.get("cpu") or {}).get("pico")
-            return ("pico", None if p is None else round(p))
-        if k == "gpu":
-            g = f.get("gpu") or {}
-            return tuple(None if g.get(c) is None else round(g[c]) for c in ("potencia", "uso"))
-        r = f.get("ram") or {}
-        return round(r.get("usado", 0) / 2**30, 1)
+        # o número do meio e a cor não são animados: redesenha quando mudam
+        num, sub = self.painel.numero_e_sub(k, self.foto)
+        return (num, sub, self.painel.estado(k, self.foto))
 
-    def _sig_bloco(self, bloco):
-        f = self.foto or {}
-        c = f.get("claude") or {}
-        if bloco == "tokens":
-            return (c.get("ok"), c.get("hoje"), c.get("semana"), c.get("hoje_saida"), c.get("semana_saida"))
-        if bloco == "limites":
-            lim = c.get("limites")
-            if not lim:
-                return None
-            agora = f.get("t", time.time())
-            jan = tuple((k, round(v["pct"]), v.get("expirou"), int((v.get("zera") or agora) - agora) // 60)
-                        for k, v in sorted(lim["janelas"].items()))
-            return (jan, int(agora - lim["recebido_em"]) // 60)
-        fans = f.get("ventoinhas") or {}
+    def _sig_fans(self):
+        fans = (self.foto or {}).get("ventoinhas") or {}
         return (tuple((x["nome"], x["rpm"]) for x in fans.get("lista") or []), fans.get("fonte"), fans.get("aviso"))
 
     def _invalidar_se_mudou(self, nome, sig):
@@ -547,7 +524,7 @@ class Janela(Gtk.Window):
             self.ticker = GLib.timeout_add(int(1000 / fps), self._tick)
 
     def _algum_critico(self):
-        return any(self.painel.m[k].estado(v) == "critico" for k, v in self.exib.items())
+        return any(self.painel.estado(k, self.foto) == "critico" for k in self.exib)
 
     def _tick(self):
         agora = time.monotonic()
@@ -558,7 +535,7 @@ class Janela(Gtk.Window):
             self._invalidar(k)
             if p >= 1.0:
                 del self.anim[k]
-        criticos = [k for k, v in self.exib.items() if self.painel.m[k].estado(v) == "critico"]
+        criticos = [k for k in self.exib if self.painel.estado(k, self.foto) == "critico"]
         for k in criticos:
             self._invalidar(k)
         if self.anim or criticos:
@@ -676,8 +653,11 @@ def listar(cfg):
 
     print("\n== CPU ==")
     cpu = coleta.SensorCPU()
-    t = cpu.ler()
-    print(f"  sensor: {cpu.descricao}; agora: {'—' if t is None else f'{t:.0f} °C'}")
+    uso = coleta.UsoCPU()
+    time.sleep(0.5)
+    t, u = cpu.ler(), uso.ler()
+    print(f"  sensor: {cpu.descricao}; agora: {'—' if t is None else f'{t:.0f} °C'}"
+          f"; uso: {'—' if u is None else f'{u:.0f} %'}")
 
     print("\n== GPU ==")
     gpu = coleta.SensorGPU()
@@ -702,24 +682,6 @@ def listar(cfg):
         print("  nenhuma encontrada")
     print("  (para escolher/renomear, use os ids acima em [ventoinhas] no config.toml)")
 
-    print("\n== Claude ==")
-    u = coleta.UsoClaude(cfg)
-    t0 = time.perf_counter()
-    u.atualizar()
-    tot = u.totais()
-    print(f"  pastas: {', '.join(u.pastas) or 'nenhuma encontrada'}")
-    print(f"  arquivos acompanhados: {len(u.arquivos)}; respostas (8 dias): {tot['respostas']}; "
-          f"leitura em {time.perf_counter() - t0:.2f} s")
-    print(f"  hoje: {desenho.fmt_milhar(tot['hoje'])} tokens (saída {desenho.fmt_milhar(tot['hoje_saida'])})")
-    print(f"  semana: {desenho.fmt_milhar(tot['semana'])} tokens (saída {desenho.fmt_milhar(tot['semana_saida'])})")
-    lim = coleta.ler_limites()
-    if lim is None:
-        print("  limites: sem dados (statusline não configurada ou Claude Code ainda não respondeu)")
-    else:
-        idade = time.time() - lim["recebido_em"]
-        for k, j in lim["janelas"].items():
-            print(f"  limite {k}: {j['pct']:.0f} %{' (janela já zerou)' if j['expirou'] else ''}")
-        print(f"  {desenho.fmt_idade(idade)}")
     print(f"\nConfiguração: {C.CONFIG_FILE}{'' if os.path.exists(C.CONFIG_FILE) else ' (não existe; usando o padrão)'}")
     print(f"Atualizações: https://github.com/{atualizacao.repositorio(cfg)}")
 
@@ -789,7 +751,7 @@ def main(argv=None):
     ap.add_argument("--demo", action="store_true", help="usa dados inventados que variam (para ver o visual)")
     ap.add_argument("--layout", choices=["janela", "faixa", "inteiro"], help="sobrepõe o modo do config")
     ap.add_argument("--monitor", help="sobrepõe o monitor do config (número ou parte do nome)")
-    ap.add_argument("--listar", action="store_true", help="mostra monitores, sensores e dados do Claude e sai")
+    ap.add_argument("--listar", action="store_true", help="mostra monitores, sensores e ventoinhas e sai")
     ap.add_argument("--png", metavar="ARQUIVO", help="salva uma imagem do painel e sai")
     ap.add_argument("--largura", type=int, help="largura da imagem do --png")
     ap.add_argument("--parar", action="store_true", help="encerra o painel que está rodando")
