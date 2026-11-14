@@ -32,7 +32,8 @@ CANTOS = {
     "inferior-direito": ("BOTTOM", "RIGHT", "Inferior direito"),
     "inferior-esquerdo": ("BOTTOM", "LEFT", "Inferior esquerdo"),
 }
-TAMANHOS = [("Pequeno", 0.8), ("Médio", 1.0), ("Grande", 1.25), ("Muito grande", 1.5)]
+TAMANHOS = [("Minúsculo", 0.4), ("Mínimo", 0.5), ("Muito pequeno", 0.65), ("Pequeno", 0.8),
+            ("Médio", 1.0), ("Grande", 1.25), ("Muito grande", 1.5)]
 MODOS = [("Janelinha no canto", "janela"), ("Faixa na parte de baixo", "faixa"), ("Monitor inteiro", "inteiro")]
 
 
@@ -127,7 +128,7 @@ class Janela(Gtk.Window):
         self.argv = argv
         self.painel = desenho.Painel(cfg, args.layout or cfg.get("layout"))
         self.layout = self.painel.layout
-        self.escala = min(max(float(cfg.get("escala", 1.0) or 1.0), 0.5), 3.0)
+        self.escala = min(max(float(cfg.get("escala", 1.0) or 1.0), 0.4), 3.0)
         self.foto = None
         self.exib = {"cpu": None, "gpu": None, "ram": None}
         self.anim = {}

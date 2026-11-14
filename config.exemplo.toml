@@ -10,7 +10,9 @@ layout = "janela"
 
 # Só no modo janela: canto ("superior-direito", "superior-esquerdo",
 # "inferior-direito", "inferior-esquerdo"), distância da borda em pixels,
-# tamanho (1.0 = normal) e se fica "acima" ou "abaixo" das outras janelas.
+# tamanho e se fica "acima" ou "abaixo" das outras janelas.
+# Tamanho: de 0.4 (minúsculo) a 1.5 (muito grande); 1.0 = médio (604 x 179 pixels).
+# Abaixo de 0.6 o clock some e ficam só o número e o nome.
 canto = "superior-direito"
 margem = 16
 escala = 1.0

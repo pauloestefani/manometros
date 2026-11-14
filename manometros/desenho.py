@@ -143,6 +143,12 @@ class Mostrador:
                 "titulo": (34, 412, 600, 5), "num": (128, 282), "unid": (34, 220, 8), "linha": (32, 344),
                 "sub": None, "estado_escrito": False, "pontas": False}
     LARG_MAX_NUMERO = 220  # o número encolhe se ficar mais largo que isso (ex.: "101,3")
+    TEXTO_MIN_PX = 8.5     # textos pequenos nunca ficam menores que isso na tela (janelinha bem pequena)
+
+    def _legivel(self, cr, tam, maximo):
+        """Aumenta um texto pequeno (em unidades do desenho) para não ficar ilegível na tela."""
+        px_por_unidade = abs(cr.user_to_device_distance(1, 0)[0]) or 1
+        return min(max(tam, self.TEXTO_MIN_PX / px_por_unidade), maximo)
 
     def __init__(self, titulo, unidade, alerta=None, critico=None):
         self.titulo, self.unidade = titulo, unidade
@@ -218,17 +224,21 @@ class Mostrador:
                 tam *= self.LARG_MAX_NUMERO / w
             w = texto(cr, numero, 250, yb, tam, 300, c_num, "centro", tnum=True)
             tu, yu, dx = d["unid"]
+            tu = self._legivel(cr, tu, 60)
             texto(cr, self.unidade, 250 + w / 2 + dx, yu, tu, 400, MUTED)
         else:
             texto(cr, "—", 250, yb - 6, tam * 0.75, 300, MUTED, "centro")
-        if linha:
-            tl, yl = d["linha"]
+        tl, yl = d["linha"]
+        px_por_unidade = abs(cr.user_to_device_distance(1, 0)[0]) or 1
+        if linha and tl * px_por_unidade >= self.TEXTO_MIN_PX * 0.8:  # nos tamanhos mínimos, some
+            tl = self._legivel(cr, tl, 60)
             texto(cr, linha, 250, yl, tl, 400, MUTED, "centro", tnum=True)
         if sub and d["sub"]:
             ts, ys = d["sub"]
             texto(cr, sub, 250, ys, ts, 400, MUTED, "centro")
         # título no vão de baixo: cinza no normal, na cor do alerta quando for o caso
         tt, yt, peso, esp = d["titulo"]
+        tt = self._legivel(cr, tt, 60)
         titulo = self.titulo
         if estado != "normal" and d["estado_escrito"]:
             titulo += " · " + ("ALERTA" if estado == "alerta" else "CRÍTICO")
