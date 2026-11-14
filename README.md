@@ -58,7 +58,8 @@ novo. Até lá, use `~/.local/bin/manometros`.
 - **Monitor**: em qual monitor ele aparece. "Automático" escolhe o que não é ultrawide.
 - **Posição**: o canto da janelinha.
 - **Tamanho**: de minúsculo (242 × 72 pixels) a muito grande. Nos dois menores,
-  o arranjo muda para caber tudo legível: sem marquinhas no arco e clock com uma casa decimal.
+  o arranjo muda para caber tudo legível: sem marquinhas no arco, temperatura como "58°",
+  RAM só com o número (o "de 32 GB" logo abaixo diz a unidade) e clock com uma casa decimal.
 - **Ficar por cima das janelas**: desligado, a janelinha fica atrás das janelas abertas.
 - **Modo**: janelinha, faixa ou monitor inteiro.
 - **Verificar atualizações** / **Atualizar para a versão X**

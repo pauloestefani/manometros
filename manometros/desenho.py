@@ -164,8 +164,9 @@ class Mostrador:
     # janelinha nos tamanhos mínimos: sem marcas no arco e clock com uma casa decimal
     MICRO = {"trilho": 20, "faixa": 6, "marca": 0, "passo": 0, "botao": (24, 15),
              "num": 118, "pequeno": 30, "sub": None, "peso_titulo": 600, "espaco_titulo": 3,
-             "espacos": (0.6, 0.55, 0.5), "centro": 240, "min_px": 8.0,
-             "estado_escrito": False, "pontas": False, "linha_curta": True}
+             "espacos": (0.6, 0.55, 0.5), "centro": 234, "min_px": 8.0,
+             "estado_escrito": False, "pontas": False, "linha_curta": True,
+             "unidade_curta": True, "larg_max": 270}
     # "espacos": espaço depois do nome, do valor e do clock (em proporção do texto pequeno)
     # "centro": altura do meio do bloco (um pouco acima do centro do círculo, por causa do vão de baixo)
     LARG_MAX_NUMERO = 220  # o número encolhe se ficar mais largo que isso (ex.: "101,3")
@@ -179,8 +180,12 @@ class Mostrador:
 
     @staticmethod
     def _px(cr):
-        """Quantos pixels da tela vale uma unidade do desenho neste momento."""
-        return abs(cr.user_to_device_distance(1, 0)[0]) or 1
+        """Quantos pixels (lógicos, como o resto da área de trabalho) vale uma unidade do desenho."""
+        try:
+            escala_tela = cr.get_target().get_device_scale()[0] or 1
+        except (AttributeError, cairo.Error):
+            escala_tela = 1
+        return (abs(cr.user_to_device_distance(1, 0)[0]) / escala_tela) or 1
 
     def _legivel(self, cr, tam, maximo=60, min_px=None):
         """Aumenta um texto pequeno (em unidades do desenho) para não ficar ilegível na tela."""
@@ -218,10 +223,15 @@ class Mostrador:
         texto_num = numero if numero is not None else "—"
         # o número fica exatamente no eixo central; a unidade fica pendurada à direita dele.
         # Se não couber no círculo (ex.: "13,1" + "GB" na janelinha bem pequena), o número encolhe.
-        dx = peq * 0.25
-        wu = largura(cr, self.unidade, peq, 400) if numero is not None else 0
+        unidade = self.unidade
+        if d.get("unidade_curta"):  # janelinha mínima: "58°" e, na RAM, só o número
+            unidade = "°" if self.unidade == "°C" else ""
+        grau_colado = unidade == "°"
+        dx = num * 0.02 if grau_colado else peq * 0.25
+        tam_u = num if grau_colado else peq
+        wu = largura(cr, unidade, tam_u, 300) if (numero is not None and unidade) else 0
         ix, iw = tinta(cr, texto_num, num, 300, tnum=True)
-        meia_max = min(self.LARG_MAX_NUMERO / 2, self.RAIO_TEXTO - dx - wu)
+        meia_max = min(d.get("larg_max", self.LARG_MAX_NUMERO) / 2, self.RAIO_TEXTO - dx - wu)
         if iw / 2 > meia_max:
             num *= meia_max / (iw / 2)
             ix, iw = tinta(cr, texto_num, num, 300, tnum=True)
@@ -243,8 +253,10 @@ class Mostrador:
             elif nome == "valor":
                 x0 = 250 - (ix + iw / 2)  # centro do desenho dos dígitos no eixo
                 texto(cr, texto_num, x0, base, num, 300, c_num if numero is not None else MUTED, tnum=True)
-                if wu:  # unidade alinhada ao topo do número, logo depois dele
-                    texto(cr, self.unidade, 250 + iw / 2 + dx, base - A * num + A * peq, peq, 400, MUTED)
+                if wu and grau_colado:  # "°" do mesmo tamanho do número, na mesma linha de base
+                    texto(cr, unidade, 250 + iw / 2 + dx, base, num, 300, c_num if numero is not None else MUTED)
+                elif wu:  # unidade pequena alinhada ao topo do número, logo depois dele
+                    texto(cr, unidade, 250 + iw / 2 + dx, base - A * num + A * peq, peq, 400, MUTED)
             elif nome == "linha":
                 texto(cr, linha, 250, base, peq, 400, MUTED, "centro", tnum=True)
             else:
