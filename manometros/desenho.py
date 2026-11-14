@@ -79,6 +79,23 @@ def texto(cr, s, x, y, tam, peso=400, rgb=INK, alinhar="esq", base=True, espaco=
     return larg
 
 
+def tinta(cr, s, tam, peso=400, tnum=False):
+    """(início, largura) do desenho real dos caracteres, sem as margens laterais da fonte."""
+    lay = PangoCairo.create_layout(cr)
+    PangoCairo.context_set_font_options(lay.get_context(), _fo)
+    fd = Pango.FontDescription.from_string(FONTE)
+    fd.set_absolute_size(tam * Pango.SCALE)
+    fd.set_weight(Pango.Weight(peso))
+    lay.set_font_description(fd)
+    if tnum:
+        attrs = Pango.AttrList()
+        attrs.insert(Pango.attr_font_features_new("tnum 1"))
+        lay.set_attributes(attrs)
+    lay.set_text(s, -1)
+    ink = lay.get_extents()[0]
+    return ink.x / Pango.SCALE, ink.width / Pango.SCALE
+
+
 def largura(cr, s, tam, peso=400, tnum=False):
     lay = PangoCairo.create_layout(cr)
     PangoCairo.context_set_font_options(lay.get_context(), _fo)
@@ -152,6 +169,7 @@ class Mostrador:
     # "espacos": espaço depois do nome, do valor e do clock (em proporção do texto pequeno)
     # "centro": altura do meio do bloco (um pouco acima do centro do círculo, por causa do vão de baixo)
     LARG_MAX_NUMERO = 220  # o número encolhe se ficar mais largo que isso (ex.: "101,3")
+    RAIO_TEXTO = 176       # até onde o texto pode ir a partir do centro sem encostar no arco
     TEXTO_MIN_PX = 8.5     # textos pequenos nunca ficam menores que isso na tela
     ALTURA_MAIUSC = 0.727  # altura das maiúsculas/dígitos da Inter em relação ao tamanho
 
@@ -198,13 +216,15 @@ class Mostrador:
         if estado != "normal" and d["estado_escrito"]:
             titulo += " · " + ("ALERTA" if estado == "alerta" else "CRÍTICO")
         texto_num = numero if numero is not None else "—"
-        # o valor encolhe se, junto com a unidade, ficar largo demais para o círculo
+        # o número fica exatamente no eixo central; a unidade fica pendurada à direita dele.
+        # Se não couber no círculo (ex.: "13,1" + "GB" na janelinha bem pequena), o número encolhe.
         dx = peq * 0.25
-        wn = largura(cr, texto_num, num, 300, tnum=True)
         wu = largura(cr, self.unidade, peq, 400) if numero is not None else 0
-        if wn + dx + wu > self.LARG_MAX_NUMERO + 60:
-            num *= (self.LARG_MAX_NUMERO + 60 - dx - wu) / wn
-            wn = largura(cr, texto_num, num, 300, tnum=True)
+        ix, iw = tinta(cr, texto_num, num, 300, tnum=True)
+        meia_max = min(self.LARG_MAX_NUMERO / 2, self.RAIO_TEXTO - dx - wu)
+        if iw / 2 > meia_max:
+            num *= meia_max / (iw / 2)
+            ix, iw = tinta(cr, texto_num, num, 300, tnum=True)
         # linhas do bloco: (altura das maiúsculas, espaço depois)
         e1, e2, e3 = d["espacos"]
         linhas = [("titulo", A * peq, e1 * peq), ("valor", A * num_nominal, e2 * peq)]
@@ -221,10 +241,10 @@ class Mostrador:
             if nome == "titulo":
                 texto(cr, titulo, 250, base, peq, d["peso_titulo"], cor_titulo, "centro", espaco=d["espaco_titulo"])
             elif nome == "valor":
-                x0 = 250 - (wn + (dx + wu if wu else 0)) / 2
+                x0 = 250 - (ix + iw / 2)  # centro do desenho dos dígitos no eixo
                 texto(cr, texto_num, x0, base, num, 300, c_num if numero is not None else MUTED, tnum=True)
-                if wu:  # unidade alinhada ao topo do número
-                    texto(cr, self.unidade, x0 + wn + dx, base - A * num + A * peq, peq, 400, MUTED)
+                if wu:  # unidade alinhada ao topo do número, logo depois dele
+                    texto(cr, self.unidade, 250 + iw / 2 + dx, base - A * num + A * peq, peq, 400, MUTED)
             elif nome == "linha":
                 texto(cr, linha, 250, base, peq, 400, MUTED, "centro", tnum=True)
             else:
