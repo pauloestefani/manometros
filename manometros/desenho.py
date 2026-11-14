@@ -134,12 +134,14 @@ class Mostrador:
 
     VB = (10, 24, 480, 420)
     # No modo compacto (janelinha) traços e textos ficam proporcionalmente maiores.
-    NORMAL = {"trilho": 8, "faixa": 2, "marca": 2, "botao": (13.5, 8.5), "titulo": (22, 186, 500, 4),
-              "num": (120, 292), "unid": (30, 226, 8), "linha": (24, 334), "sub": (19, 366),
-              "estado": (18, 394), "pontas": True}
-    COMPACTO = {"trilho": 16, "faixa": 5, "marca": 4, "botao": (22, 14), "titulo": (46, 176, 600, 5),
-                "num": (150, 318), "unid": (48, 248, 10), "linha": (38, 366), "sub": None,
-                "estado": (40, 410), "pontas": False}
+    # O título ("CPU") fica no vão de baixo do arco, como nos manômetros de carro;
+    # no meio ficam só o número grande e, embaixo dele, a linha pequena (clock).
+    NORMAL = {"trilho": 8, "faixa": 2, "marca": 2, "passo": 10, "botao": (13.5, 8.5),
+              "titulo": (22, 406, 500, 4), "num": (116, 282), "unid": (28, 218, 8), "linha": (26, 330),
+              "sub": (18, 364), "estado_escrito": True, "pontas": True}
+    COMPACTO = {"trilho": 14, "faixa": 5, "marca": 3, "passo": 25, "botao": (20, 12.5),
+                "titulo": (34, 412, 600, 5), "num": (128, 282), "unid": (34, 220, 8), "linha": (32, 344),
+                "sub": None, "estado_escrito": False, "pontas": False}
     LARG_MAX_NUMERO = 220  # o número encolhe se ficar mais largo que isso (ex.: "101,3")
 
     def __init__(self, titulo, unidade, alerta=None, critico=None):
@@ -177,15 +179,13 @@ class Mostrador:
             cr.stroke()
         cr.set_line_width(d["marca"])
         cor(cr, FAINT)
-        for v in range(0, 101, 10):
+        for v in range(0, 101, d["passo"]):
             _traco(cr, v, 0, 100, 178 - d["trilho"] / 2, 188 - d["trilho"] / 2)
         cr.stroke()
         if d["pontas"]:
             for v in (0, 100):
                 px, py = _pt(196, _ang(v, 0, 100))
                 texto(cr, f"{v}%" if v else "0", px, py + 34, 20, 400, MUTED, "centro")
-        tam, yb, peso, esp = d["titulo"]
-        texto(cr, self.titulo, 250, yb, tam, peso, MUTED, "centro", espaco=esp)
         cr.restore()
 
     def dinamico(self, cr, x, y, larg, arco, numero, estado="normal", sub="", destaque=INK, pulso=1.0, linha=""):
@@ -227,9 +227,12 @@ class Mostrador:
         if sub and d["sub"]:
             ts, ys = d["sub"]
             texto(cr, sub, 250, ys, ts, 400, MUTED, "centro")
-        if estado != "normal":
-            te, ye = d["estado"]
-            texto(cr, "ALERTA" if estado == "alerta" else "CRÍTICO", 250, ye, te, 600, c_num, "centro", espaco=4)
+        # título no vão de baixo: cinza no normal, na cor do alerta quando for o caso
+        tt, yt, peso, esp = d["titulo"]
+        titulo = self.titulo
+        if estado != "normal" and d["estado_escrito"]:
+            titulo += " · " + ("ALERTA" if estado == "alerta" else "CRÍTICO")
+        texto(cr, titulo, 250, yt, tt, peso, MUTED if estado == "normal" else c_num, "centro", espaco=esp)
         cr.restore()
 
 
@@ -250,9 +253,10 @@ class Painel:
             "ram": Mostrador("RAM", "GB", r["alerta"], r["critico"]),
         }
         if self.layout == "janela":
-            self.W, self.H = 520.0, 164.0
-            gl = 150
-            self.g = {k: (x, 14, gl) for k, x in zip(("cpu", "gpu", "ram"), (20, 185, 350))}
+            gl, gap, pad = 168, 28, 22
+            self.W = 2 * pad + 3 * gl + 2 * gap
+            self.H = 18 + self.m["cpu"].altura(gl) + 14
+            self.g = {k: (pad + i * (gl + gap), 18, gl) for i, k in enumerate(("cpu", "gpu", "ram"))}
         elif self.layout == "inteiro":
             self.W, self.H = 1920.0, 1080.0
             gl, gap = 560, 60
