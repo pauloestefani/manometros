@@ -95,6 +95,13 @@ def largura(cr, s, tam, peso=400, tnum=False):
 
 
 # ---------------------------------------------------------------- formatação
+def fmt_ghz(mhz):
+    """2610 -> '2,61 GHz'"""
+    if not mhz:
+        return ""
+    return f"{mhz / 1000:.2f} GHz".replace(".", ",")
+
+
 def fmt_milhar(n):
     return f"{int(round(n)):,}".replace(",", ".")
 
@@ -128,9 +135,11 @@ class Mostrador:
     VB = (10, 24, 480, 420)
     # No modo compacto (janelinha) traços e textos ficam proporcionalmente maiores.
     NORMAL = {"trilho": 8, "faixa": 2, "marca": 2, "botao": (13.5, 8.5), "titulo": (22, 186, 500, 4),
-              "num": (120, 292), "unid": (30, 226, 8), "sub": (21, 342), "estado": (18, 392), "pontas": True}
+              "num": (120, 292), "unid": (30, 226, 8), "linha": (24, 334), "sub": (19, 366),
+              "estado": (18, 394), "pontas": True}
     COMPACTO = {"trilho": 16, "faixa": 5, "marca": 4, "botao": (22, 14), "titulo": (46, 176, 600, 5),
-                "num": (150, 318), "unid": (48, 248, 10), "sub": None, "estado": (40, 404), "pontas": False}
+                "num": (150, 318), "unid": (48, 248, 10), "linha": (38, 366), "sub": None,
+                "estado": (40, 410), "pontas": False}
     LARG_MAX_NUMERO = 220  # o número encolhe se ficar mais largo que isso (ex.: "101,3")
 
     def __init__(self, titulo, unidade, alerta=None, critico=None):
@@ -179,8 +188,8 @@ class Mostrador:
         texto(cr, self.titulo, 250, yb, tam, peso, MUTED, "centro", espaco=esp)
         cr.restore()
 
-    def dinamico(self, cr, x, y, larg, arco, numero, estado="normal", sub="", destaque=INK, pulso=1.0):
-        """arco: 0–100 (ou None); numero: texto do meio (ou None)."""
+    def dinamico(self, cr, x, y, larg, arco, numero, estado="normal", sub="", destaque=INK, pulso=1.0, linha=""):
+        """arco: 0–100 (ou None); numero: texto do meio (ou None); linha: texto pequeno embaixo dele."""
         d = self._dim(larg)
         self._entrar(cr, x, y, larg)
         c_arco = {"normal": destaque, "alerta": AMBER, "critico": RED}[estado]
@@ -212,6 +221,9 @@ class Mostrador:
             texto(cr, self.unidade, 250 + w / 2 + dx, yu, tu, 400, MUTED)
         else:
             texto(cr, "—", 250, yb - 6, tam * 0.75, 300, MUTED, "centro")
+        if linha:
+            tl, yl = d["linha"]
+            texto(cr, linha, 250, yl, tl, 400, MUTED, "centro", tnum=True)
         if sub and d["sub"]:
             ts, ys = d["sub"]
             texto(cr, sub, 250, ys, ts, 400, MUTED, "centro")
@@ -238,29 +250,22 @@ class Painel:
             "ram": Mostrador("RAM", "GB", r["alerta"], r["critico"]),
         }
         if self.layout == "janela":
-            self.W, self.H = 520.0, 262.0
+            self.W, self.H = 520.0, 164.0
             gl = 150
             self.g = {k: (x, 14, gl) for k, x in zip(("cpu", "gpu", "ram"), (20, 185, 350))}
-            self.reg = {"fans": (16, 166, 488, 92)}
         elif self.layout == "inteiro":
             self.W, self.H = 1920.0, 1080.0
-            colw = (1920 - 160 - 160) / 3
-            gl = 460
-            self.g = {k: (80 + i * (colw + 80) + (colw - gl) / 2, 72, gl) for i, k in enumerate(("cpu", "gpu", "ram"))}
-            self.reg = {"fans": (76, 600, 1768, 440)}
+            gl, gap = 560, 60
+            x0 = (1920 - (3 * gl + 2 * gap)) / 2
+            y0 = (1080 - self.m["cpu"].altura(gl)) / 2
+            self.g = {k: (x0 + i * (gl + gap), y0, gl) for i, k in enumerate(("cpu", "gpu", "ram"))}
         else:
             self.W, self.H = 1920.0, 280.0
-            gl = 250
-            gap = (1808 - (3 * 250 + 1 + 900)) / 4
-            x, pos = 56, []
-            for w in (250, 250, 250, 1, 900):
-                pos.append(x)
-                x += w + gap
-            gy = (280 - self.m["cpu"].altura(gl)) / 2
-            self.g = {"cpu": (pos[0], gy, gl), "gpu": (pos[1], gy, gl), "ram": (pos[2], gy, gl)}
-            self.div = pos[3]
-            self.fx = pos[4]
-            self.reg = {"fans": (self.fx - 4, 20, 908, 250)}
+            gl, gap = 250, 160
+            x0 = (1920 - (3 * gl + 2 * gap)) / 2
+            y0 = (280 - self.m["cpu"].altura(gl)) / 2
+            self.g = {k: (x0 + i * (gl + gap), y0, gl) for i, k in enumerate(("cpu", "gpu", "ram"))}
+        self.reg = {}
         for k, (x, y, gl) in self.g.items():
             self.reg[k] = (x - 2, y - 2, gl + 4, self.m[k].altura(gl) + 4)
         r = 12 if self.layout == "janela" else 28
@@ -284,19 +289,20 @@ class Painel:
             return "alerta"
         return "normal"
 
-    def numero_e_sub(self, k, foto):
-        """Texto do meio do mostrador e a linha de baixo (só aparece nos modos grandes)."""
+    def textos(self, k, foto):
+        """(número do meio, linha pequena embaixo dele, linha extra dos modos grandes)."""
         if k == "ram":
             r = (foto or {}).get("ram")
             if not r:
-                return None, ""
+                return None, "", ""
             gb = r["usado"] / 2**30
             num = (f"{gb:.0f}" if gb >= 100 else f"{gb:.1f}").replace(".", ",")
-            return num, f"{r['pct']:.0f} % de {r['total'] / 2**30:.0f} GB"
+            return num, f"de {r['total'] / 2**30:.0f} GB", f"{r['pct']:.0f} % em uso"
         f = (foto or {}).get(k) or {}
         if k == "gpu" and not f.get("existe", True):
-            return None, "GPU não encontrada"
+            return None, "", "GPU não encontrada"
         t = f.get("temp")
+        linha = fmt_ghz(f.get("clock"))
         partes = []
         if f.get("uso") is not None:
             partes.append(f"uso {f['uso']:.0f} %")
@@ -306,7 +312,7 @@ class Painel:
             partes.append(f"{f['potencia']:.0f} W")
         if t is None and k == "cpu":
             partes.append("sensor não encontrado")
-        return (None if t is None else f"{round(t)}"), " · ".join(partes)
+        return (None if t is None else f"{round(t)}"), linha, " · ".join(partes)
 
     # --- encaixe na tela
     def encaixe(self, larg, alt):
@@ -342,41 +348,8 @@ class Painel:
             cr.stroke()
         for k, (x, y, gl) in self.g.items():
             self.m[k].estatico(cr, x, y, gl)
-        cor(cr, LINE)
-        if self.layout == "janela":
-            cr.rectangle(20, 158, 480, 1)
-            cr.fill()
-            self._cabecalho(cr, 20, 480, 182, "Ventoinhas", "rpm", 11)
-        elif self.layout == "inteiro":
-            cr.rectangle(80, 584, 1760, 1)
-            cr.fill()
-            self._cabecalho(cr, 80, 1760, 646, "Ventoinhas", "rpm")
-        else:
-            cr.rectangle(self.div, 28, 1, 224)
-            cr.fill()
-            self._cabecalho(cr, self.fx, 900, 47, "Ventoinhas", "rpm", 14)
         cr.restore()
 
-    def _cabecalho(self, cr, x, w, y, esq, dir_="", tam=16):
-        texto(cr, esq.upper(), x, y, tam, 500, MUTED, espaco=3 if tam >= 14 else 2)
-        if dir_:
-            texto(cr, dir_, x + w, y, tam + (1 if tam >= 14 else 0), 400, MUTED, "dir")
-
-    def _trilho(self, cr, x, y, w, h):
-        cor(cr, TRACK)
-        _retangulo_arredondado(cr, x, y, w, h, h / 2)
-        cr.fill()
-
-    def _barra(self, cr, x, y, w, h, frac):
-        frac = min(max(frac, 0.0), 1.0)
-        if frac <= 0:
-            return
-        rgb = RED if frac >= 0.9 else AMBER if frac >= 0.75 else self.destaque
-        cor(cr, rgb)
-        _retangulo_arredondado(cr, x, y, max(w * frac, h), h, h / 2)
-        cr.fill()
-
-    # --- camada dinâmica
     def dinamico(self, cr, larg, alt, foto, exib, pulso=1.0, clip=None, aviso=False):
         s, ox, oy = self.encaixe(larg, alt)
         if clip is not None:  # converte o recorte da tela para o espaço de projeto
@@ -395,67 +368,15 @@ class Painel:
         if foto:
             for k, (x, y, gl) in self.g.items():
                 if visivel(k):
-                    num, sub = self.numero_e_sub(k, foto)
+                    num, linha, sub = self.textos(k, foto)
                     self.m[k].dinamico(cr, x, y, gl, exib.get(k), num, self.estado(k, foto), sub,
-                                       self.destaque, pulso)
-            if visivel("fans"):
-                f = foto.get("ventoinhas") or {}
-                {"janela": self._fans_janela, "inteiro": self._fans_inteiro, "faixa": self._fans_faixa}[
-                    self.layout](cr, f)
+                                       self.destaque, pulso, linha)
         if aviso and visivel("aviso"):  # há versão nova: um ponto discreto no canto
             px, py, pr = self.ponto
             cor(cr, AMBER)
             cr.arc(px, py, pr, 0, 2 * math.pi)
             cr.fill()
         cr.restore()
-
-    # --- ventoinhas
-    @staticmethod
-    def _curto(nome, n):
-        return nome if len(nome) <= n else nome[: n - 1] + "…"
-
-    def _sem_fans(self, cr, f, x, y, tam):
-        texto(cr, "nenhuma ventoinha encontrada", x, y, tam, 400, MUTED)
-        if f.get("aviso"):
-            texto(cr, f["aviso"], x, y + tam * 1.6, tam - 2, 400, MUTED)
-
-    def _fans_janela(self, cr, f):
-        lista = (f.get("lista") or [])[:4]
-        if not lista:
-            return self._sem_fans(cr, f, 20, 208, 13)
-        for i, fan in enumerate(lista):  # grade 2 x 2
-            x, yb = 20 + (i % 2) * 255, 208 + (i // 2) * 28
-            texto(cr, self._curto(fan["nome"], 16), x, yb, 13, 400, INK)
-            texto(cr, fmt_milhar(fan["rpm"]), x + 225, yb, 17, 300, INK, "dir", tnum=True)
-            self._trilho(cr, x, yb + 5, 225, 2)
-            self._barra(cr, x, yb + 5, 225, 2, fan["frac"])
-
-    def _fans_inteiro(self, cr, f):
-        lista = (f.get("lista") or [])[:4]
-        if not lista:
-            return self._sem_fans(cr, f, 80, 740, 22)
-        colw = (1760 - 3 * 80) / 4
-        for i, fan in enumerate(lista):  # até 4 colunas
-            x = 80 + i * (colw + 80)
-            texto(cr, self._curto(fan["nome"], 24), x, 740, 22, 400, INK)
-            wn = texto(cr, fmt_milhar(fan["rpm"]), x, 860, 96, 300, INK, tnum=True)
-            texto(cr, "rpm", x + wn + 12, 860, 30, 400, MUTED)
-            self._trilho(cr, x, 896, colw, 4)
-            self._barra(cr, x, 896, colw, 4, fan["frac"])
-        if f.get("fonte") and f.get("fonte") != "demo":
-            rodape = f"via {f['fonte']}" + (f" · {f['aviso']}" if f.get("aviso") else "")
-            texto(cr, rodape, 80, 982, 16, 400, MUTED)
-
-    def _fans_faixa(self, cr, f):
-        lista = (f.get("lista") or [])[:4]
-        if not lista:
-            return self._sem_fans(cr, f, self.fx, 112, 16)
-        for i, fan in enumerate(lista):  # grade 2 x 2
-            x, yb = self.fx + (i % 2) * 470, 112 + (i // 2) * 80
-            texto(cr, self._curto(fan["nome"], 20), x, yb, 18, 400, INK)
-            texto(cr, fmt_milhar(fan["rpm"]), x + 430, yb + 2, 30, 300, INK, "dir", tnum=True)
-            self._trilho(cr, x, yb + 14, 430, 3)
-            self._barra(cr, x, yb + 14, 430, 3, fan["frac"])
 
 
 def _retangulo_arredondado(cr, x, y, w, h, r):

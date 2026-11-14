@@ -35,13 +35,16 @@ fps = 24
 # Sugestões: "#EDEDED" (cinza-claro), "#9BB4C8" (azul-aço), "#C9B79C" (areia), "#8FD3B6" (verde-claro)
 cor_destaque = "#EDEDED"
 
-# Nos mostradores de CPU e GPU, o arco mostra o USO (%) e o número do meio a TEMPERATURA.
+# Nos mostradores de CPU e GPU, o arco mostra o USO (%), o número do meio a TEMPERATURA
+# e, pequenininho embaixo, o CLOCK.
 # Na RAM, o arco mostra a % em uso e o número os GB usados.
 # A cor muda pela temperatura (CPU/GPU, em °C) ou pela % em uso (RAM):
 # âmbar a partir de "alerta", vermelho a partir de "critico".
 [cpu]
 alerta = 80
 critico = 90
+# Clock exibido: "maximo" (o núcleo mais rápido no momento) ou "media" (média de todos)
+clock = "maximo"
 
 [gpu]
 alerta = 78
@@ -50,22 +53,6 @@ critico = 85
 [ram]
 alerta = 80
 critico = 90
-
-[ventoinhas]
-# "auto" tenta o CoolerControl e, se não der, lê direto do kernel (hwmon)
-fonte = "auto"
-coolercontrol_url = "http://localhost:11987"
-# Token de acesso SÓ DE LEITURA criado no CoolerControl (veja o README)
-coolercontrol_token = ""
-# Quais ventoinhas mostrar, pelos ids de  manometros --listar . Vazio = as 4 primeiras girando.
-mostrar = []
-# Rotação considerada "barra cheia" (o painel ajusta para cima sozinho se passar disso)
-rpm_max = 2000
-
-# Nomes que aparecem no painel. Use os ids de  manometros --listar
-[ventoinhas.nomes]
-# "nct6798/fan1" = "CPU"
-# "nct6798/fan2" = "Frente"
 
 [atualizacao]
 # Procura versão nova no GitHub uma vez por dia e avisa com um ponto no painel.

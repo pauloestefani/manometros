@@ -498,18 +498,12 @@ class Janela(Gtk.Window):
             elif abs(alvo - atual) >= 0.05:
                 self.anim[k] = (atual, alvo, agora)
             self._invalidar_se_mudou(k, self._sig_mostrador(k))
-        self._invalidar_se_mudou("fans", self._sig_fans())
         self._ligar_ticker()
         return False
 
     def _sig_mostrador(self, k):
         # o número do meio e a cor não são animados: redesenha quando mudam
-        num, sub = self.painel.numero_e_sub(k, self.foto)
-        return (num, sub, self.painel.estado(k, self.foto))
-
-    def _sig_fans(self):
-        fans = (self.foto or {}).get("ventoinhas") or {}
-        return (tuple((x["nome"], x["rpm"]) for x in fans.get("lista") or []), fans.get("fonte"), fans.get("aviso"))
+        return (*self.painel.textos(k, self.foto), self.painel.estado(k, self.foto))
 
     def _invalidar_se_mudou(self, nome, sig):
         if self.assinaturas.get(nome, object()) != sig:
@@ -654,16 +648,20 @@ def listar(cfg):
     print("\n== CPU ==")
     cpu = coleta.SensorCPU()
     uso = coleta.UsoCPU()
+    clock = coleta.ClockCPU((cfg.get("cpu") or {}).get("clock", "maximo"))
     time.sleep(0.5)
-    t, u = cpu.ler(), uso.ler()
+    t, u, c = cpu.ler(), uso.ler(), clock.ler()
     print(f"  sensor: {cpu.descricao}; agora: {'—' if t is None else f'{t:.0f} °C'}"
-          f"; uso: {'—' if u is None else f'{u:.0f} %'}")
+          f"; uso: {'—' if u is None else f'{u:.0f} %'}; clock: {desenho.fmt_ghz(c) or '—'}"
+          f" ({f'{len(clock.arquivos)} núcleos via cpufreq' if clock.arquivos else 'via /proc/cpuinfo'}"
+          f", modo {clock.modo})")
 
     print("\n== GPU ==")
     gpu = coleta.SensorGPU()
-    gt, gp, gu = gpu.ler()
+    gt, gp, gu, gc = gpu.ler()
     if gpu.nome:
-        print(f"  {gpu.nome}: {gt} °C, {gp if gp is None else round(gp)} W, uso {gu} %")
+        print(f"  {gpu.nome}: {gt} °C, {gp if gp is None else round(gp)} W, uso {gu} %, "
+              f"clock {desenho.fmt_ghz(gc) or '—'}")
     else:
         print(f"  não encontrada ({gpu.erro})")
 
@@ -671,16 +669,6 @@ def listar(cfg):
     r = coleta.ler_ram()
     if r:
         print(f"  {r['usado'] / 2**30:.1f} de {r['total'] / 2**30:.1f} GB ({r['pct']:.0f} %)".replace(".", ","))
-
-    print("\n== Ventoinhas ==")
-    v = coleta.Ventoinhas(cfg)
-    todas = v.todas()
-    print(f"  fonte: {v.fonte}" + (f" ({v.aviso})" if v.aviso else ""))
-    for ident, nome, rpm in todas:
-        print(f"  {ident:<40} {nome:<18} {rpm:>6} rpm")
-    if not todas:
-        print("  nenhuma encontrada")
-    print("  (para escolher/renomear, use os ids acima em [ventoinhas] no config.toml)")
 
     print(f"\nConfiguração: {C.CONFIG_FILE}{'' if os.path.exists(C.CONFIG_FILE) else ' (não existe; usando o padrão)'}")
     print(f"Atualizações: https://github.com/{atualizacao.repositorio(cfg)}")
@@ -751,7 +739,7 @@ def main(argv=None):
     ap.add_argument("--demo", action="store_true", help="usa dados inventados que variam (para ver o visual)")
     ap.add_argument("--layout", choices=["janela", "faixa", "inteiro"], help="sobrepõe o modo do config")
     ap.add_argument("--monitor", help="sobrepõe o monitor do config (número ou parte do nome)")
-    ap.add_argument("--listar", action="store_true", help="mostra monitores, sensores e ventoinhas e sai")
+    ap.add_argument("--listar", action="store_true", help="mostra monitores e sensores e sai")
     ap.add_argument("--png", metavar="ARQUIVO", help="salva uma imagem do painel e sai")
     ap.add_argument("--largura", type=int, help="largura da imagem do --png")
     ap.add_argument("--parar", action="store_true", help="encerra o painel que está rodando")

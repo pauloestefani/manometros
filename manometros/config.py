@@ -28,18 +28,10 @@ PADRAO = {
     "animacao": True,
     "fps": 24,
     "cor_destaque": "#EDEDED",
-    "cpu": {"alerta": 80, "critico": 90},   # °C: muda a cor do mostrador
+    "cpu": {"alerta": 80, "critico": 90,    # °C: muda a cor do mostrador
+            "clock": "maximo"},             # clock exibido: "maximo" (núcleo mais rápido) ou "media"
     "gpu": {"alerta": 78, "critico": 85},   # °C
     "ram": {"alerta": 80, "critico": 90},   # % em uso
-    "ventoinhas": {
-        "fonte": "auto",             # "auto", "coolercontrol" ou "hwmon"
-        "coolercontrol_url": "http://localhost:11987",
-        "coolercontrol_token": "",
-        "mostrar": [],               # ids (veja: manometros --listar); vazio = automático
-        "nomes": {},                 # id -> nome exibido
-        "rpm_max": 2000,
-        "maximo": 4,
-    },
     "atualizacao": {
         "verificar": True,           # procura versão nova no GitHub uma vez por dia
         "repositorio": "",           # vazio = o repositório oficial do programa

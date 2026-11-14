@@ -26,7 +26,7 @@ if [ "$(id -u)" -eq 0 ]; then
 fi
 
 # ------------------------------------------------------------------ 1. dependências
-negrito "1/6 · Verificando o que já está instalado"
+negrito "1/5 · Verificando o que já está instalado"
 declare -A PARA_QUE=(
   [python3-gi]="liga o Python às bibliotecas gráficas do sistema"
   [python3-gi-cairo]="permite desenhar com Cairo a partir do Python"
@@ -72,7 +72,7 @@ fi
 echo "  Python usado: $PY"
 
 # ------------------------------------------------------------------ 2. arquivos
-negrito "2/6 · Copiando o programa para $DESTINO"
+negrito "2/5 · Copiando o programa para $DESTINO"
 "$LANCADOR" --parar >/dev/null 2>&1 || true
 mkdir -p "$DESTINO" "$BIN_DIR" "$CONF_DIR"
 rm -rf "$DESTINO/manometros"
@@ -100,7 +100,7 @@ else
 fi
 
 # ------------------------------------------------------------------ 3. modo
-negrito "3/6 · Como o painel deve aparecer"
+negrito "3/5 · Como o painel deve aparecer"
 echo "  1) Janelinha no canto de um monitor (padrão)"
 echo "  2) Faixa na parte de baixo de um monitor"
 echo "  3) Monitor inteiro"
@@ -114,7 +114,7 @@ PYTHONPATH="$DESTINO" "$PY" -c "from manometros import config; config.salvar({'l
 echo "  modo: $MODO. Depois dá para trocar o modo, o monitor, o canto e o tamanho clicando no painel."
 
 # ------------------------------------------------------------------ 4. início automático
-negrito "4/6 · Início automático"
+negrito "4/5 · Início automático"
 echo "Cria um atalho em $AUTOSTART_DIR para o painel abrir quando você entra na sessão."
 if pergunta "Ativar? [S/n]" s; then
   mkdir -p "$AUTOSTART_DIR"
@@ -122,7 +122,7 @@ if pergunta "Ativar? [S/n]" s; then
 [Desktop Entry]
 Type=Application
 Name=Manômetros
-Comment=Painel de temperatura e uso de CPU, GPU, RAM e ventoinhas
+Comment=Painel de temperatura, uso e clock de CPU e GPU, e uso de RAM
 Exec=$LANCADOR
 Terminal=false
 X-GNOME-Autostart-enabled=true
@@ -132,33 +132,8 @@ else
   echo "  pulado."
 fi
 
-# ------------------------------------------------------------------ 5. CoolerControl
-negrito "5/6 · Ventoinhas pelo CoolerControl (opcional)"
-cat <<'EOF'
-Se o CoolerControl pedir autenticação, crie um token SÓ DE LEITURA nele
-(na seção Access Protection > Access Tokens, direito "Read-Only") e cole aqui.
-Sem token, o painel lê as ventoinhas direto do kernel, com os nomes técnicos.
-EOF
-read -r -s -p "Cole o token (ou só Enter para pular): " TOKEN || true
-echo
-if [ -n "${TOKEN:-}" ]; then
-  "$PY" - "$CONF_DIR/config.toml" "$TOKEN" <<'PYEOF'
-import re, sys
-caminho, token = sys.argv[1], sys.argv[2].strip()
-txt = open(caminho, encoding="utf-8").read()
-novo, n = re.subn(r'(?m)^coolercontrol_token\s*=.*$', f'coolercontrol_token = "{token}"', txt)
-if n == 0:
-    novo = txt.replace("[ventoinhas]", f'[ventoinhas]\ncoolercontrol_token = "{token}"', 1)
-open(caminho, "w", encoding="utf-8").write(novo)
-print("  token salvo no config.toml")
-PYEOF
-  chmod 600 "$CONF_DIR/config.toml"
-else
-  echo "  pulado."
-fi
-
-# ------------------------------------------------------------------ 6. teste
-negrito "6/6 · Diagnóstico"
+# ------------------------------------------------------------------ 5. teste
+negrito "5/5 · Diagnóstico"
 "$LANCADOR" --listar || true
 
 echo
@@ -171,7 +146,7 @@ cat <<EOF
 Clique no painel para escolher monitor, canto, tamanho, modo e para atualizar.
 
 Comandos úteis:
-  manometros --listar      mostra monitores, sensores e ventoinhas
+  manometros --listar      mostra monitores e sensores
   manometros --atualizar   procura e instala uma versão nova
   manometros --reiniciar   reabre o painel (use depois de editar a configuração)
   manometros --parar       fecha o painel

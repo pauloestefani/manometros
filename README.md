@@ -4,13 +4,12 @@ Painel no estilo dos manômetros de carro para Linux. Pode ficar como uma
 janelinha num canto do monitor, como uma faixa na parte de baixo ou ocupando
 um monitor inteiro.
 
-| Mostrador | O arco mostra | O número do meio mostra |
-|---|---|---|
-| **CPU** | uso (%) | temperatura (°C) |
-| **GPU** (NVIDIA) | uso (%) | temperatura (°C) |
-| **RAM** | % em uso | GB usados |
+| Mostrador | O arco mostra | O número do meio mostra | Embaixo, pequeno |
+|---|---|---|---|
+| **CPU** | uso (%) | temperatura (°C) | clock (GHz) |
+| **GPU** (NVIDIA) | uso (%) | temperatura (°C) | clock (GHz) |
+| **RAM** | % em uso | GB usados | total de RAM |
 
-Embaixo ficam as **ventoinhas**, com a rotação (pelo CoolerControl ou direto do kernel).
 A cor muda para âmbar e depois vermelho quando a temperatura (CPU/GPU) ou a
 % de RAM passa dos limites do config.
 
@@ -36,7 +35,7 @@ cd manometros
 Sem o git, clique em **Code → Download ZIP** nesta página, extraia e rode
 `bash instalar.sh` dentro da pasta.
 
-O instalador faz 6 passos e pergunta antes de cada um que muda algo:
+O instalador faz 5 passos e pergunta antes de cada um que muda algo:
 
 | Passo | O que faz | Precisa de senha? |
 |---|---|---|
@@ -44,8 +43,7 @@ O instalador faz 6 passos e pergunta antes de cada um que muda algo:
 | 2 | Copia o programa para `~/.local/share/manometros` e cria o comando `manometros` | Não |
 | 3 | Escolhe o modo: janelinha, faixa ou monitor inteiro | Não |
 | 4 | Ativa o início automático com a sessão | Não |
-| 5 | (Opcional) Guarda o token do CoolerControl | Não |
-| 6 | Mostra um diagnóstico e abre o painel | Não |
+| 5 | Mostra um diagnóstico e abre o painel | Não |
 
 Os pacotes do passo 1 são todos oficiais do Ubuntu/Pop!_OS: `python3-gi`,
 `python3-gi-cairo`, `gir1.2-gtk-3.0`, `gir1.2-gtklayershell-0.1` e `fonts-inter`.
@@ -71,7 +69,7 @@ As escolhas ficam salvas em `~/.config/manometros/config.toml`.
 Pelo terminal:
 
 ```bash
-manometros --listar       # monitores, sensores e ventoinhas
+manometros --listar       # monitores e sensores (temperatura, uso e clock)
 manometros --reiniciar    # reabre o painel (depois de editar a configuração à mão)
 manometros --parar        # fecha o painel
 manometros --atualizar    # procura e instala uma versão nova
@@ -119,23 +117,8 @@ Depois de editar à mão, rode `manometros --reiniciar`.
   se fica acima ou abaixo das janelas (modo janela)
 - `cor_destaque`: a cor dos arcos no estado normal
 - `[cpu]`, `[gpu]`: temperatura (°C) em que fica âmbar (`alerta`) e vermelho (`critico`)
+- `[cpu] clock`: "maximo" (o núcleo mais rápido no momento) ou "media" (média de todos)
 - `[ram]`: % em uso em que fica âmbar e vermelho
-- `[ventoinhas] mostrar` e `[ventoinhas.nomes]`: quais ventoinhas e com que nome
-  (os ids aparecem no `--listar`)
-
-## Ventoinhas e CoolerControl
-
-O painel tenta a API local do CoolerControl (`http://localhost:11987`). Se ela
-pedir autenticação, crie um token **só de leitura** no CoolerControl, na parte de
-*Access Protection > Access Tokens*, e coloque no config:
-
-```toml
-[ventoinhas]
-coolercontrol_token = "cc_..."
-```
-
-Sem token, ele lê as ventoinhas direto do kernel (`/sys/class/hwmon`), com nomes
-técnicos como "Fan 2". Dá para renomear em `[ventoinhas.nomes]`.
 
 ## Como ele se fixa no monitor (Wayland)
 
