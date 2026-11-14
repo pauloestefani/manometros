@@ -133,26 +133,38 @@ class Mostrador:
     às do SVG do esboço (viewBox 500x500)."""
 
     VB = (10, 24, 480, 420)
-    # No modo compacto (janelinha) traços e textos ficam proporcionalmente maiores.
     # O título ("CPU") fica no vão de baixo do arco, como nos manômetros de carro;
-    # no meio ficam só o número grande e, embaixo dele, a linha pequena (clock).
+    # no meio ficam o número grande e, embaixo dele, a linha pequena (clock).
+    # "num": (tamanho, linha de base); "unid": (tamanho, espaço depois do número);
+    # "linha", "sub": (tamanho, linha de base); "titulo": (tamanho, base, peso, espaçamento).
     NORMAL = {"trilho": 8, "faixa": 2, "marca": 2, "passo": 10, "botao": (13.5, 8.5),
-              "titulo": (22, 406, 500, 4), "num": (116, 282), "unid": (28, 218, 8), "linha": (26, 330),
+              "titulo": (22, 406, 500, 4), "num": (116, 282), "unid": (28, 8), "linha": (26, 330),
               "sub": (18, 364), "estado_escrito": True, "pontas": True}
+    # janelinha
     COMPACTO = {"trilho": 14, "faixa": 5, "marca": 3, "passo": 25, "botao": (20, 12.5),
-                "titulo": (34, 412, 600, 5), "num": (128, 282), "unid": (34, 220, 8), "linha": (32, 344),
+                "titulo": (34, 412, 600, 5), "num": (128, 282), "unid": (34, 8), "linha": (32, 344),
                 "sub": None, "estado_escrito": False, "pontas": False}
+    # janelinha nos tamanhos mínimos: sem marcas no arco, textos com posições próprias
+    # para caberem legíveis sem encostar uns nos outros
+    MICRO = {"trilho": 20, "faixa": 6, "marca": 0, "passo": 0, "botao": (24, 15),
+             "titulo": (34, 424, 600, 4), "num": (140, 272), "unid": (34, 6), "linha": (32, 346),
+             "sub": None, "estado_escrito": False, "pontas": False, "linha_curta": True}
     LARG_MAX_NUMERO = 220  # o número encolhe se ficar mais largo que isso (ex.: "101,3")
-    TEXTO_MIN_PX = 8.5     # textos pequenos nunca ficam menores que isso na tela (janelinha bem pequena)
-
-    def _legivel(self, cr, tam, maximo):
-        """Aumenta um texto pequeno (em unidades do desenho) para não ficar ilegível na tela."""
-        px_por_unidade = abs(cr.user_to_device_distance(1, 0)[0]) or 1
-        return min(max(tam, self.TEXTO_MIN_PX / px_por_unidade), maximo)
+    TEXTO_MIN_PX = 8.5     # textos pequenos nunca ficam menores que isso na tela
+    ALTURA_MAIUSC = 0.727  # altura das maiúsculas/dígitos da Inter em relação ao tamanho
 
     def __init__(self, titulo, unidade, alerta=None, critico=None):
         self.titulo, self.unidade = titulo, unidade
         self.alerta, self.critico = alerta, critico  # marcas coloridas no arco (opcionais)
+
+    @staticmethod
+    def _px(cr):
+        """Quantos pixels da tela vale uma unidade do desenho neste momento."""
+        return abs(cr.user_to_device_distance(1, 0)[0]) or 1
+
+    def _legivel(self, cr, tam, maximo=60):
+        """Aumenta um texto pequeno (em unidades do desenho) para não ficar ilegível na tela."""
+        return min(max(tam, self.TEXTO_MIN_PX / self._px(cr)), maximo)
 
     def _entrar(self, cr, x, y, larg):
         cr.save()
@@ -164,12 +176,15 @@ class Mostrador:
     def altura(self, larg):
         return larg * self.VB[3] / self.VB[2]
 
-    def _dim(self, larg):
-        return self.COMPACTO if larg < 220 else self.NORMAL
+    def _dim(self, cr, larg):
+        """Escolhe o arranjo pelo tamanho real na tela (chamar depois de _entrar)."""
+        if larg >= 220:
+            return self.NORMAL
+        return self.MICRO if self._px(cr) < 0.2 else self.COMPACTO
 
     def estatico(self, cr, x, y, larg):
-        d = self._dim(larg)
         self._entrar(cr, x, y, larg)
+        d = self._dim(cr, larg)
         cr.set_line_cap(cairo.LINE_CAP_BUTT)
         cr.set_line_width(d["trilho"])
         cor(cr, TRACK)
@@ -183,11 +198,12 @@ class Mostrador:
             cor(cr, RED, 0.75)
             _arco(cr, 216, _ang(self.critico, 0, 100), INICIO + VARREDURA)
             cr.stroke()
-        cr.set_line_width(d["marca"])
-        cor(cr, FAINT)
-        for v in range(0, 101, d["passo"]):
-            _traco(cr, v, 0, 100, 178 - d["trilho"] / 2, 188 - d["trilho"] / 2)
-        cr.stroke()
+        if d["passo"]:
+            cr.set_line_width(d["marca"])
+            cor(cr, FAINT)
+            for v in range(0, 101, d["passo"]):
+                _traco(cr, v, 0, 100, 178 - d["trilho"] / 2, 188 - d["trilho"] / 2)
+            cr.stroke()
         if d["pontas"]:
             for v in (0, 100):
                 px, py = _pt(196, _ang(v, 0, 100))
@@ -196,8 +212,8 @@ class Mostrador:
 
     def dinamico(self, cr, x, y, larg, arco, numero, estado="normal", sub="", destaque=INK, pulso=1.0, linha=""):
         """arco: 0–100 (ou None); numero: texto do meio (ou None); linha: texto pequeno embaixo dele."""
-        d = self._dim(larg)
         self._entrar(cr, x, y, larg)
+        d = self._dim(cr, larg)
         c_arco = {"normal": destaque, "alerta": AMBER, "critico": RED}[estado]
         c_num = {"normal": INK, "alerta": AMBER, "critico": RED}[estado]
         alfa = pulso if estado == "critico" else 1.0
@@ -219,30 +235,38 @@ class Mostrador:
             cr.fill()
         tam, yb = d["num"]
         if numero is not None:
+            # número e unidade centralizados juntos; a unidade alinhada ao topo do número
             w = largura(cr, numero, tam, 300, tnum=True)
             if w > self.LARG_MAX_NUMERO:
                 tam *= self.LARG_MAX_NUMERO / w
-            w = texto(cr, numero, 250, yb, tam, 300, c_num, "centro", tnum=True)
-            tu, yu, dx = d["unid"]
-            tu = self._legivel(cr, tu, 60)
-            texto(cr, self.unidade, 250 + w / 2 + dx, yu, tu, 400, MUTED)
+                w = largura(cr, numero, tam, 300, tnum=True)
+            tu, dx = d["unid"]
+            tu = self._legivel(cr, tu)
+            wu = largura(cr, self.unidade, tu, 400)
+            x0 = 250 - (w + dx + wu) / 2
+            texto(cr, numero, x0, yb, tam, 300, c_num, tnum=True)
+            topo = yb - self.ALTURA_MAIUSC * tam
+            texto(cr, self.unidade, x0 + w + dx, topo + self.ALTURA_MAIUSC * tu, tu, 400, MUTED)
         else:
             texto(cr, "—", 250, yb - 6, tam * 0.75, 300, MUTED, "centro")
-        tl, yl = d["linha"]
-        px_por_unidade = abs(cr.user_to_device_distance(1, 0)[0]) or 1
-        if linha and tl * px_por_unidade >= self.TEXTO_MIN_PX * 0.8:  # nos tamanhos mínimos, some
-            tl = self._legivel(cr, tl, 60)
-            texto(cr, linha, 250, yl, tl, 400, MUTED, "centro", tnum=True)
+        if linha and d.get("linha_curta") and linha.endswith(" GHz"):  # "4,18 GHz" -> "4,2 GHz"
+            try:
+                linha = f"{float(linha.split()[0].replace(',', '.')):.1f} GHz".replace(".", ",")
+            except ValueError:
+                pass
+        if linha:
+            tl, yl = d["linha"]
+            texto(cr, linha, 250, yl, self._legivel(cr, tl), 400, MUTED, "centro", tnum=True)
         if sub and d["sub"]:
             ts, ys = d["sub"]
             texto(cr, sub, 250, ys, ts, 400, MUTED, "centro")
         # título no vão de baixo: cinza no normal, na cor do alerta quando for o caso
         tt, yt, peso, esp = d["titulo"]
-        tt = self._legivel(cr, tt, 60)
         titulo = self.titulo
         if estado != "normal" and d["estado_escrito"]:
             titulo += " · " + ("ALERTA" if estado == "alerta" else "CRÍTICO")
-        texto(cr, titulo, 250, yt, tt, peso, MUTED if estado == "normal" else c_num, "centro", espaco=esp)
+        texto(cr, titulo, 250, yt, self._legivel(cr, tt), peso, MUTED if estado == "normal" else c_num, "centro",
+              espaco=esp)
         cr.restore()
 
 

@@ -12,7 +12,7 @@ layout = "janela"
 # "inferior-direito", "inferior-esquerdo"), distância da borda em pixels,
 # tamanho e se fica "acima" ou "abaixo" das outras janelas.
 # Tamanho: de 0.4 (minúsculo) a 1.5 (muito grande); 1.0 = médio (604 x 179 pixels).
-# Abaixo de 0.6 o clock some e ficam só o número e o nome.
+# Abaixo de 0.6 o arranjo fica mais enxuto (clock com uma casa decimal) para continuar legível.
 canto = "superior-direito"
 margem = 16
 escala = 1.0
