@@ -133,22 +133,24 @@ class Mostrador:
     às do SVG do esboço (viewBox 500x500)."""
 
     VB = (10, 24, 480, 420)
-    # O título ("CPU") fica no vão de baixo do arco, como nos manômetros de carro;
-    # no meio ficam o número grande e, embaixo dele, a linha pequena (clock).
-    # "num": (tamanho, linha de base); "unid": (tamanho, espaço depois do número);
-    # "linha", "sub": (tamanho, linha de base); "titulo": (tamanho, base, peso, espaçamento).
+    # Textos em dois tamanhos: "num" (o valor grande) e "pequeno" (nome, unidade e clock).
+    # Nome, valor e clock formam um bloco centralizado no meio do círculo.
     NORMAL = {"trilho": 8, "faixa": 2, "marca": 2, "passo": 10, "botao": (13.5, 8.5),
-              "titulo": (22, 406, 500, 4), "num": (116, 282), "unid": (28, 8), "linha": (26, 330),
-              "sub": (18, 364), "estado_escrito": True, "pontas": True}
+              "num": 112, "pequeno": 24, "sub": 18, "peso_titulo": 500, "espaco_titulo": 4,
+              "espacos": (0.95, 0.85, 0.7), "centro": 246, "min_px": 8.5,
+              "estado_escrito": True, "pontas": True}
     # janelinha
     COMPACTO = {"trilho": 14, "faixa": 5, "marca": 3, "passo": 25, "botao": (20, 12.5),
-                "titulo": (34, 412, 600, 5), "num": (128, 282), "unid": (34, 8), "linha": (32, 344),
-                "sub": None, "estado_escrito": False, "pontas": False}
-    # janelinha nos tamanhos mínimos: sem marcas no arco, textos com posições próprias
-    # para caberem legíveis sem encostar uns nos outros
+                "num": 124, "pequeno": 30, "sub": None, "peso_titulo": 600, "espaco_titulo": 4,
+                "espacos": (0.95, 0.85, 0.7), "centro": 246, "min_px": 8.5,
+                "estado_escrito": False, "pontas": False}
+    # janelinha nos tamanhos mínimos: sem marcas no arco e clock com uma casa decimal
     MICRO = {"trilho": 20, "faixa": 6, "marca": 0, "passo": 0, "botao": (24, 15),
-             "titulo": (34, 424, 600, 4), "num": (140, 272), "unid": (34, 6), "linha": (32, 346),
-             "sub": None, "estado_escrito": False, "pontas": False, "linha_curta": True}
+             "num": 118, "pequeno": 30, "sub": None, "peso_titulo": 600, "espaco_titulo": 3,
+             "espacos": (0.6, 0.55, 0.5), "centro": 240, "min_px": 8.0,
+             "estado_escrito": False, "pontas": False, "linha_curta": True}
+    # "espacos": espaço depois do nome, do valor e do clock (em proporção do texto pequeno)
+    # "centro": altura do meio do bloco (um pouco acima do centro do círculo, por causa do vão de baixo)
     LARG_MAX_NUMERO = 220  # o número encolhe se ficar mais largo que isso (ex.: "101,3")
     TEXTO_MIN_PX = 8.5     # textos pequenos nunca ficam menores que isso na tela
     ALTURA_MAIUSC = 0.727  # altura das maiúsculas/dígitos da Inter em relação ao tamanho
@@ -162,9 +164,9 @@ class Mostrador:
         """Quantos pixels da tela vale uma unidade do desenho neste momento."""
         return abs(cr.user_to_device_distance(1, 0)[0]) or 1
 
-    def _legivel(self, cr, tam, maximo=60):
+    def _legivel(self, cr, tam, maximo=60, min_px=None):
         """Aumenta um texto pequeno (em unidades do desenho) para não ficar ilegível na tela."""
-        return min(max(tam, self.TEXTO_MIN_PX / self._px(cr)), maximo)
+        return min(max(tam, (min_px or self.TEXTO_MIN_PX) / self._px(cr)), maximo)
 
     def _entrar(self, cr, x, y, larg):
         cr.save()
@@ -181,6 +183,53 @@ class Mostrador:
         if larg >= 220:
             return self.NORMAL
         return self.MICRO if self._px(cr) < 0.2 else self.COMPACTO
+
+    def _textos_centrais(self, cr, d, numero, estado, c_num, linha, sub):
+        """Nome, valor (com unidade) e clock empilhados e centralizados no meio do círculo."""
+        A = self.ALTURA_MAIUSC
+        peq = self._legivel(cr, d["pequeno"], min_px=d["min_px"])  # nome, unidade e clock: o mesmo tamanho
+        num = num_nominal = d["num"]
+        if linha and d.get("linha_curta") and linha.endswith(" GHz"):  # "4,18 GHz" -> "4,2 GHz"
+            try:
+                linha = f"{float(linha.split()[0].replace(',', '.')):.1f} GHz".replace(".", ",")
+            except ValueError:
+                pass
+        titulo = self.titulo
+        if estado != "normal" and d["estado_escrito"]:
+            titulo += " · " + ("ALERTA" if estado == "alerta" else "CRÍTICO")
+        texto_num = numero if numero is not None else "—"
+        # o valor encolhe se, junto com a unidade, ficar largo demais para o círculo
+        dx = peq * 0.25
+        wn = largura(cr, texto_num, num, 300, tnum=True)
+        wu = largura(cr, self.unidade, peq, 400) if numero is not None else 0
+        if wn + dx + wu > self.LARG_MAX_NUMERO + 60:
+            num *= (self.LARG_MAX_NUMERO + 60 - dx - wu) / wn
+            wn = largura(cr, texto_num, num, 300, tnum=True)
+        # linhas do bloco: (altura das maiúsculas, espaço depois)
+        e1, e2, e3 = d["espacos"]
+        linhas = [("titulo", A * peq, e1 * peq), ("valor", A * num_nominal, e2 * peq)]
+        if linha:
+            linhas.append(("linha", A * peq, e3 * peq))
+        sub_tam = d["sub"]
+        if sub and sub_tam:
+            linhas.append(("sub", A * sub_tam, 0))
+        altura = sum(h for _, h, _ in linhas) + sum(g for _, _, g in linhas[:-1])
+        y = d["centro"] - altura / 2
+        cor_titulo = MUTED if estado == "normal" else c_num
+        for nome, h, g in linhas:
+            base = y + h
+            if nome == "titulo":
+                texto(cr, titulo, 250, base, peq, d["peso_titulo"], cor_titulo, "centro", espaco=d["espaco_titulo"])
+            elif nome == "valor":
+                x0 = 250 - (wn + (dx + wu if wu else 0)) / 2
+                texto(cr, texto_num, x0, base, num, 300, c_num if numero is not None else MUTED, tnum=True)
+                if wu:  # unidade alinhada ao topo do número
+                    texto(cr, self.unidade, x0 + wn + dx, base - A * num + A * peq, peq, 400, MUTED)
+            elif nome == "linha":
+                texto(cr, linha, 250, base, peq, 400, MUTED, "centro", tnum=True)
+            else:
+                texto(cr, sub, 250, base, sub_tam, 400, MUTED, "centro")
+            y = base + g
 
     def estatico(self, cr, x, y, larg):
         self._entrar(cr, x, y, larg)
@@ -233,40 +282,7 @@ class Mostrador:
             cor(cr, c_arco, alfa)
             cr.arc(kx, ky, dentro, 0, 2 * math.pi)
             cr.fill()
-        tam, yb = d["num"]
-        if numero is not None:
-            # número e unidade centralizados juntos; a unidade alinhada ao topo do número
-            w = largura(cr, numero, tam, 300, tnum=True)
-            if w > self.LARG_MAX_NUMERO:
-                tam *= self.LARG_MAX_NUMERO / w
-                w = largura(cr, numero, tam, 300, tnum=True)
-            tu, dx = d["unid"]
-            tu = self._legivel(cr, tu)
-            wu = largura(cr, self.unidade, tu, 400)
-            x0 = 250 - (w + dx + wu) / 2
-            texto(cr, numero, x0, yb, tam, 300, c_num, tnum=True)
-            topo = yb - self.ALTURA_MAIUSC * tam
-            texto(cr, self.unidade, x0 + w + dx, topo + self.ALTURA_MAIUSC * tu, tu, 400, MUTED)
-        else:
-            texto(cr, "—", 250, yb - 6, tam * 0.75, 300, MUTED, "centro")
-        if linha and d.get("linha_curta") and linha.endswith(" GHz"):  # "4,18 GHz" -> "4,2 GHz"
-            try:
-                linha = f"{float(linha.split()[0].replace(',', '.')):.1f} GHz".replace(".", ",")
-            except ValueError:
-                pass
-        if linha:
-            tl, yl = d["linha"]
-            texto(cr, linha, 250, yl, self._legivel(cr, tl), 400, MUTED, "centro", tnum=True)
-        if sub and d["sub"]:
-            ts, ys = d["sub"]
-            texto(cr, sub, 250, ys, ts, 400, MUTED, "centro")
-        # título no vão de baixo: cinza no normal, na cor do alerta quando for o caso
-        tt, yt, peso, esp = d["titulo"]
-        titulo = self.titulo
-        if estado != "normal" and d["estado_escrito"]:
-            titulo += " · " + ("ALERTA" if estado == "alerta" else "CRÍTICO")
-        texto(cr, titulo, 250, yt, self._legivel(cr, tt), peso, MUTED if estado == "normal" else c_num, "centro",
-              espaco=esp)
+        self._textos_centrais(cr, d, numero, estado, c_num, linha, sub)
         cr.restore()
 
 
